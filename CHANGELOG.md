@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.0.2 — 2026-10-22
+
+- 将应用名称统一为 `lottery`，包括中英文启动器名称。
+- 将包 ID 改为 `abby.lzcapp.lottery`，重新生成 LPK；保留 1.0.1 的本地化格式修复。
+- 新旧包 ID 属于独立应用，旧 ID 的数据不会自动迁移。
+
 ## 1.0.1 — 2026-10-22
 
 - 修复懒猫微服安装报错 `invalid package.yml: cannot unmarshal !!map into string`：将设置入口的中英文翻译改为扁平字符串键 `entries.settings.title`。
