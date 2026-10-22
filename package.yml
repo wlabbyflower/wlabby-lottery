@@ -1,5 +1,5 @@
 package: abby.lzcapp.lottery
-version: 1.0.2
+version: 1.0.3
 name: lottery
 description: 太空科技风格的活动抽奖，支持四套主题、Excel 名单导入、奖品配置、单人补抽和结果导出。
 author: wlabbyflower（基于 moshang-ax/lottery）

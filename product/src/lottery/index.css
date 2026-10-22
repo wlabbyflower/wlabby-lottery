@@ -2,3 +2,8 @@
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
 #prizeBar{height:calc(100% - 32px)}
+
+#container>.gpu-scene{display:block;touch-action:none;outline:none}
+#container>.winner-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.winner-overlay .element{position:absolute;top:0;left:0;transform-origin:center;will-change:transform}
+[data-renderer="css3d"] #container .element{contain:layout paint style}

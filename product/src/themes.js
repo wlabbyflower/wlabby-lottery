@@ -10,6 +10,7 @@ export function applyTheme(id = 'nebula') {
   for (const [key, value] of Object.entries({ '--accent': theme.accent, '--accent-2': theme.accent2, '--accent-rgb': theme.rgb, '--space': theme.background })) document.documentElement.style.setProperty(key, value);
   window.lotteryBackground = theme.background;
   window.lotteryStarColor = theme.rgb;
+  window.dispatchEvent(new CustomEvent("lottery-theme-change", {detail:theme}));
   return theme;
 }
 export const icons = {

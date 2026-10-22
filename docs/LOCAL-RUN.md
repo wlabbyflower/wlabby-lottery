@@ -77,7 +77,7 @@ docker compose up -d --build
 
 `npm test`：唯一工号、奖池耗尽、余量限制、单人补抽、失败不改结果、重复模式、权重与定向规则。
 
-`npm run build`：Vite 生产构建。Three.js/TWEEN 仍以原有全局脚本加载，Vite 会提示不打包这些脚本；它们由 public/lib 原样复制，浏览器实测可正常加载。
+`npm run build`：Vite 生产构建。Three.js 通过 npm 依赖构建，主场景默认使用 WebGL2 实例化渲染；只有 TWEEN 仍以原有全局脚本加载。渲染架构和测试方法见 [RENDERING.md](RENDERING.md)。
 
 完整浏览器冒烟脚本见 `scripts/smoke-test.cjs`，需要 Playwright 和 Chromium；使用临时状态目录及 18888 端口，不改变正在运行活动的名单/中奖结果。
 

@@ -1,7 +1,10 @@
+import * as THREE from "three";
+import { TrackballControls } from "three/addons/controls/TrackballControls.js";
+import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
+import { GPUCardRenderer } from "./gpu-renderer.js";
 import { THEMES, applyTheme, icon } from "../themes.js";
 import "./index.css";
 import "../css/animate.min.css";
-import "./canvas.js";
 import {
   addQipao,
   setPrizes,
@@ -13,7 +16,7 @@ import { NUMBER_MATRIX } from "./config.js";
 
 const ROTATE_TIME = 3000;
 const ROTATE_LOOP = 1000;
-const BASE_HEIGHT = 1080;
+
 
 let TOTAL_CARDS,
   btns = {
@@ -43,7 +46,18 @@ let camera,
     sphere: []
   };
 
-let rotateObj;
+let rotateObj, gpu;
+let frameId = 0, lastFrame = 0, renderDirty = true, dragging = false;
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+function scheduleFrame() {
+  if (!document.hidden && !frameId) frameId = requestAnimationFrame(animate);
+}
+window.addEventListener('lottery-theme-change', () => render());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { cancelAnimationFrame(frameId); frameId = 0; }
+  else { lastFrame = 0; render(); }
+});
+reducedMotion.addEventListener('change', () => render());
 
 let selectedCardIndex = [],
   rotate = false,
@@ -84,7 +98,7 @@ async function initAll() {
     TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
     updatePrize();
     initCards();
-    animate();
+    render();
     shineCard();
   } catch (error) { addQipao('加载失败：' + error.message); }
 }
@@ -129,88 +143,53 @@ async function api(url, data = {}) {
 }
 
 function initCards() {
-  let member = basicData.users.slice(),
-    showCards = [],
-    length = member.length;
-
-  let isBold = false,
-    showTable = basicData.leftUsers.length === basicData.users.length,
-    index = 0,
-    totalMember = member.length,
-    position = {
-      x: (140 * COLUMN_COUNT - 20) / 2,
-      y: (180 * ROW_COUNT - 20) / 2
-    };
-
-  camera = new THREE.PerspectiveCamera(
-    40,
-    window.innerWidth / window.innerHeight,
-    1,
-    10000
-  );
-  camera.position.z = Math.max(3000, COLUMN_COUNT * 190);
-
+  const members = basicData.users;
+  const showTable = basicData.leftUsers.length === members.length;
+  const container = document.getElementById('container');
+  camera = new THREE.PerspectiveCamera(40,innerWidth/innerHeight,1,30000);
+  camera.position.z = Math.max(3000,COLUMN_COUNT*190);
   scene = new THREE.Scene();
-
-  for (let i = 0; i < ROW_COUNT; i++) {
-    for (let j = 0; j < COLUMN_COUNT; j++) {
-      isBold = HIGHLIGHT_CELL.includes(j + "-" + i);
-      var element = createCard(
-        member[index % length],
-        isBold,
-        index,
-        showTable
-      );
-
-      var object = new THREE.CSS3DObject(element);
-      object.position.x = Math.random() * 4000 - 2000;
-      object.position.y = Math.random() * 4000 - 2000;
-      object.position.z = Math.random() * 4000 - 2000;
-      scene.add(object);
-      threeDCards.push(object);
-      //
-
-      var object = new THREE.Object3D();
-      object.position.x = j * 140 - position.x;
-      object.position.y = -(i * 180) + position.y;
-      targets.table.push(object);
-      index++;
-    }
+  try {
+    gpu = new GPUCardRenderer(container,scene,camera,TOTAL_CARDS);
+    gpu.onInvalidate = render;
+    renderer = gpu.renderer;
+    document.documentElement.dataset.renderer = 'webgl2';
+    document.documentElement.dataset.rendererState = 'ready';
+    const info = gpu.info;
+    document.getElementById('renderStatus').textContent = info.software ? 'WebGL · 软件渲染' : 'WebGL · GPU 渲染';
+    document.getElementById('renderStatus').title = info.software ? '浏览器当前使用软件渲染器。开启浏览器硬件加速可使用显卡。' : info.device;
+    window.lotteryRenderInfo = () => gpu.diagnostics();
+  } catch(error) {
+    container.replaceChildren();
+    renderer = new CSS3DRenderer(); container.append(renderer.domElement);
+    document.documentElement.dataset.renderer = 'css3d';
+    document.getElementById('renderStatus').textContent = '兼容渲染';
+    document.getElementById('renderStatus').title = '浏览器未提供 WebGL2，已使用 CSS 兼容模式。';
+    window.lotteryRenderInfo = () => ({mode:'css3d',reason:error.message,cardCount:TOTAL_CARDS});
   }
-
-  // sphere
-
-  var vector = new THREE.Vector3();
-
-  for (var i = 0, l = threeDCards.length; i < l; i++) {
-    var phi = Math.acos(-1 + (2 * i) / l);
-    var theta = Math.sqrt(l * Math.PI) * phi;
-    var object = new THREE.Object3D();
-    object.position.setFromSphericalCoords(800 * Resolution, phi, theta);
-    vector.copy(object.position).multiplyScalar(2);
-    object.lookAt(vector);
-    targets.sphere.push(object);
+  renderer.setSize(innerWidth,innerHeight);
+  if(gpu) gpu.setSize(innerWidth,innerHeight);
+  const centerX=(140*COLUMN_COUNT-20)/2, centerY=(180*ROW_COUNT-20)/2;
+  const vector = new THREE.Vector3();
+  for(let i=0;i<TOTAL_CARDS;i++) {
+    const row=Math.floor(i/COLUMN_COUNT),column=i%COLUMN_COUNT;
+    const highlighted=HIGHLIGHT_CELL.includes(column+'-'+row);
+    const member=members[i%members.length];
+    const object=gpu ? new THREE.Object3D() : new CSS3DObject(createCard(member,highlighted,i,showTable));
+    object.position.set(Math.random()*4000-2000,Math.random()*4000-2000,Math.random()*4000-2000);
+    scene.add(object); threeDCards.push(object);
+    if(gpu) { gpu.setLabel(i,member,COMPANY); gpu.setHighlight(i,highlighted && showTable); }
+    const table=new THREE.Object3D(); table.position.set(column*140-centerX,-row*180+centerY); targets.table.push(table);
+    const sphere=new THREE.Object3D(),phi=Math.acos(-1+2*i/TOTAL_CARDS),theta=Math.sqrt(TOTAL_CARDS*Math.PI)*phi;
+    sphere.position.setFromSphericalCoords(800,phi,theta); vector.copy(sphere.position).multiplyScalar(2); sphere.lookAt(vector); targets.sphere.push(sphere);
   }
-
-  renderer = new THREE.CSS3DRenderer();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.getElementById("container").appendChild(renderer.domElement);
-
-  //
-
-  controls = new THREE.TrackballControls(camera, renderer.domElement);
-  controls.rotateSpeed = 0.5;
-  controls.minDistance = 500;
-  controls.maxDistance = Math.max(6000, COLUMN_COUNT * 220);
-  controls.addEventListener("change", render);
-
-  bindEvent();
-
-  if (showTable) {
-    switchScreen("enter");
-  } else {
-    switchScreen("lottery");
-  }
+  if(gpu) gpu.objects=threeDCards;
+  controls=new TrackballControls(camera,renderer.domElement);
+  controls.staticMoving=true; controls.rotateSpeed=.5; controls.minDistance=500; controls.maxDistance=Math.max(6000,COLUMN_COUNT*220);
+  controls.addEventListener('change',render);
+  controls.addEventListener('start',()=>{dragging=true;render();});
+  controls.addEventListener('end',()=>{dragging=false;render();});
+  bindEvent(); switchScreen(showTable?'enter':'lottery');
 }
 
 function setLotteryStatus(status = false) {
@@ -322,12 +301,14 @@ function createCard(user, isBold, id, showTable) {
 }
 
 function removeHighlight() {
+  if(gpu) { for(let i=0;i<TOTAL_CARDS;i++) gpu.setHighlight(i,false); render(); return; }
   document.querySelectorAll(".highlight").forEach(node => {
     node.classList.remove("highlight");
   });
 }
 
 function addHighlight() {
+  if(gpu) { for(let i=0;i<TOTAL_CARDS;i++) gpu.setHighlight(i,HIGHLIGHT_CELL.includes((i%COLUMN_COUNT)+'-'+Math.floor(i/COLUMN_COUNT))); render(); return; }
   document.querySelectorAll(".lightitem").forEach(node => {
     node.classList.add("highlight");
   });
@@ -337,6 +318,7 @@ function addHighlight() {
  * 渲染地球等
  */
 function transform(targets, duration) {
+  render();
   TWEEN.removeAll();
   for (var i = 0; i < threeDCards.length; i++) {
     var object = threeDCards[i];
@@ -373,26 +355,8 @@ function transform(targets, duration) {
     .start();
 }
 
-// function rotateBall() {
-//   return new Promise((resolve, reject) => {
-//     scene.rotation.y = 0;
-//     new TWEEN.Tween(scene.rotation)
-//       .to(
-//         {
-//           y: Math.PI * 8
-//         },
-//         ROTATE_TIME
-//       )
-//       .onUpdate(render)
-//       .easing(TWEEN.Easing.Exponential.InOut)
-//       .start()
-//       .onComplete(() => {
-//         resolve();
-//       });
-//   });
-// }
-
 function rotateBall() {
+  render();
   return new Promise((resolve, reject) => {
     scene.rotation.y = 0;
     rotateObj = new TWEEN.Tween(scene.rotation);
@@ -419,27 +383,30 @@ function rotateBall() {
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  if(gpu) { gpu.setSize(innerWidth,innerHeight); gpu.updateOverlay(); }
+  else renderer.setSize(innerWidth,innerHeight);
   render();
 }
 
-function animate() {
-  // 让场景通过x轴或者y轴旋转
-  // rotate && (scene.rotation.y += 0.088);
-
-  requestAnimationFrame(animate);
-  TWEEN.update();
-  controls.update();
-
-  // 渲染循环
-  // render();
+function animate(time) {
+  frameId=0;
+  if(document.hidden) return;
+  const animating=TWEEN.getAll().length>0;
+  const frameBudget=(animating || dragging) && !gpu?.info.software ? 1000/60 : 1000/30;
+  if(time-lastFrame<frameBudget-1) { scheduleFrame(); return; }
+  lastFrame=time;
+  const changed=renderDirty || animating || dragging;
+  if(animating) TWEEN.update(); // Bundled tween v7 starts on Date.now(), not the RAF time origin.
+  if(changed) controls.update();
+  renderDirty=false;
+  if(gpu) gpu.render(threeDCards,reducedMotion.matches?0:time,changed);
+  else if(changed) renderer.render(scene,camera);
+  if(TWEEN.getAll().length || dragging || (gpu && !reducedMotion.matches && !gpu.lost)) scheduleFrame();
 }
-
-function render() {
-  renderer.render(scene, camera);
-}
+function render() { renderDirty=true; scheduleFrame(); }
 
 function selectCard(duration = 600) {
+  render();
   rotate = false;
   controls.enabled = false;
   TWEEN.removeAll();
@@ -499,7 +466,8 @@ function selectCard(duration = 600) {
     .onUpdate(render)
     .start()
     .onComplete(() => {
-      selectedCardIndex.forEach(i => threeDCards[i].element.classList.add("prize"));
+      if(gpu) gpu.showWinners(selectedCardIndex,createCard);
+      else selectedCardIndex.forEach(i => threeDCards[i].element.classList.add("prize"));
       document.body.classList.add("showing-winners");
       setLotteryStatus();
     });
@@ -509,8 +477,10 @@ function selectCard(duration = 600) {
  * 重置抽奖牌内容
  */
 function resetCard(duration = 500) {
+  render();
   controls.enabled = true;
   document.body.classList.remove("showing-winners");
+  if(gpu) gpu.clearWinners();
   if (currentLuckys.length === 0) {
     return Promise.resolve();
   }
@@ -552,7 +522,7 @@ function resetCard(duration = 500) {
       .onComplete(() => {
         selectedCardIndex.forEach(index => {
           let object = threeDCards[index];
-          object.element.classList.remove("prize");
+          if(!gpu) object.element.classList.remove("prize");
         });
         resolve();
       });
@@ -606,8 +576,11 @@ function random(num) {
  */
 function changeCard(cardIndex, user) {
   if (!user) return;
+  if(gpu) { gpu.setLabel(cardIndex,user,COMPANY); render(); return; }
   const card = threeDCards[cardIndex].element;
-  card.replaceChildren(createElement('company', COMPANY), createElement('name', user[1]), createElement('details', user[0] + ' · ' + (user[2] || '')));
+  card.querySelector('.name').textContent=user[1];
+  card.querySelector('.details').textContent=user[0]+' · '+(user[2] || '');
+  card.querySelector('.employee-photo')?.remove();
   if (user[3] && /^https?:\/\//i.test(user[3])) {
     const photo = document.createElement('img'); photo.src = user[3]; photo.className = 'employee-photo'; photo.alt = user[1]; card.appendChild(photo);
   }
@@ -626,9 +599,10 @@ function shine(cardIndex, color) {
  * 随机切换背景和人员信息
  */
 function shineCard() {
-  let maxCard = 10,
+  if(gpu) return; // GPU shader pulses cards without DOM or texture repainting.
+  let maxCard = 3,
     maxUser;
-  let shineCard = 10 + random(maxCard);
+  let shineCard = 2 + random(maxCard);
 
   setInterval(() => {
     // 正在抽奖停止闪烁
@@ -647,7 +621,7 @@ function shineCard() {
       shine(cardIndex);
       changeCard(cardIndex, basicData.leftUsers[index]);
     }
-  }, 500);
+  }, 2500);
 }
 
 function createHighlight() {
@@ -668,49 +642,9 @@ function createHighlight() {
   return cells;
 }
 
-let onload = window.onload;
-
-window.onload = function () {
-  onload && onload();
-
-  let music = document.querySelector("#music");
-
-  let rotated = 0,
-    stopAnimate = false,
-    musicBox = document.querySelector("#musicBox");
-
-  function animate() {
-    requestAnimationFrame(function () {
-      if (stopAnimate) {
-        return;
-      }
-      rotated = rotated % 360;
-      musicBox.style.color = "var(--accent)";
-      rotated += 0;
-      animate();
-    });
-  }
-
-  musicBox.addEventListener(
-    "click",
-    function (e) {
-      if (music.paused) {
-        music.play().then(
-          () => {
-            stopAnimate = false;
-            animate();
-          },
-          () => {
-            addQipao("背景音乐自动播放失败，请手动播放！");
-          }
-        );
-      } else {
-        music.pause();
-        stopAnimate = true;
-      }
-    },
-    false
-  );
-
-  musicBox.addEventListener("keydown", event => { if(event.key === "Enter" || event.key === " ") { event.preventDefault(); musicBox.click(); } });
-};
+const music = document.querySelector('#music'), musicBox = document.querySelector('#musicBox');
+musicBox.addEventListener('click',async()=>{
+  try { if(music.paused) await music.play(); else music.pause(); musicBox.setAttribute('aria-pressed',String(!music.paused)); }
+  catch(error) { addQipao('背景音乐播放失败，请手动重试。'); }
+});
+musicBox.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();musicBox.click();}});

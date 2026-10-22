@@ -12,6 +12,7 @@
 
 ## 本版改动
 
+- 默认使用 WebGL2 实例化批量渲染卡片墙及着色器星空；无 WebGL2 时使用 CSS3D 兼容模式。硬件加速取决于浏览器设置与显卡驱动，页面会区分 GPU / 软件渲染。
 - 四套可切换的太空 UI：深空星舰、紫域星云、极光航线、日冕远征，支持即时预览与保存。
 - 左上角齿轮设置入口；左侧分类设置：基础设置、UI 主题、名单导入、中奖名单、奖品设置、抽奖规则。
 - 支持活动标题、公司标识与欢迎墙高亮文字，不再固定年份。
@@ -46,12 +47,12 @@ npm start
 
 ```bash
 mkdir -p artifacts
-lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.2-amd64.lpk
-lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.2-amd64.lpk
-lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.2-amd64.lpk
+lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
+lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
+lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
 ```
 
-- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.2`。
+- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.3`。
 - LPK v2 采用 `embed:lottery` 打包应用层；运行不依赖开发电脑。基础镜像层通过已固定的懒猫 Registry 镜像获取。
 - 数据保存在微服 `/lzcapp/var/lottery/`，包括名单、设置和中奖记录；不会把开发电脑现有活动数据打入安装包。
 - 应用通过微服账号鉴权，无额外应用登录。所有获授权用户共享同一场活动，建议由一位主持人操作。

@@ -11,14 +11,8 @@
   </head>
 
   <body>
-    <script src="./lib/three.min.js"></script>
     <script src="./lib/tween.min.js"></script>
-    <script src="./lib/TrackballControls.js"></script>
-    <script src="./lib/CSS3DRenderer.js"></script>
 
-    <div class="canvas-box">
-      <canvas id="canvas">你的浏览器不支持canvas</canvas>
-    </div>
 
     <div class="cosmos"><div class="orbital-path"></div><div class="planet"></div></div>
     <header class="screen-header"><div class="header-left"><a class="settings-link icon-button" href="/admin.html" aria-label="活动设置" title="活动设置" data-icon="gear"></a><div class="identity"><div class="eyebrow">ORBITAL / LOTTERY</div><strong>星际抽奖控制台</strong></div></div><h1 id="eventTitle"></h1><div class="header-right"><div class="connection">SYSTEM ONLINE</div><div class="theme-control"><button id="themeToggle" class="icon-button" aria-label="切换 UI 主题" title="切换 UI 主题" aria-expanded="false" data-icon="palette"></button><div id="themeMenu" class="theme-menu none" role="menu" aria-label="UI 主题"></div></div><span id="themeLabel" class="theme-label"></span><div class="music">
@@ -28,7 +22,7 @@
 
     </div></header>
     <aside class="prize-panel"><div class="prize-panel-title">MISSION REWARDS <span>奖项序列</span></div><div id="prizeBar"></div></aside>
-    <aside class="telemetry"><div class="telemetry-label">CREW MEMBERS / 参与人员</div><div class="telemetry-value"><span id="crewTotal">—</span><small>人</small></div><div class="telemetry-label">AVAILABLE / 当前奖池</div><div class="telemetry-value"><span id="crewAvailable">—</span><small>人</small></div><div class="telemetry-foot">ALL SYSTEMS NOMINAL<br>READY FOR THE NEXT SIGNAL</div></aside>
+    <aside class="telemetry"><div class="telemetry-label">CREW MEMBERS / 参与人员</div><div class="telemetry-value"><span id="crewTotal">—</span><small>人</small></div><div class="telemetry-label">AVAILABLE / 当前奖池</div><div class="telemetry-value"><span id="crewAvailable">—</span><small>人</small></div><div class="telemetry-foot"><span id="renderStatus">正在初始化渲染</span><br>READY FOR THE NEXT SIGNAL</div></aside>
     <div class="screen-footer"><span>◈</span> ORBITAL STATION<br>YOUR NEXT LUCKY COORDINATE</div>
 
     <div id="container"></div>
