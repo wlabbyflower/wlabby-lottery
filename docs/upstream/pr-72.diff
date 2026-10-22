@@ -1,0 +1,25 @@
+diff --git a/README-ZH_CN.MD b/README-ZH_CN.MD
+index 3e0d46a..7d89c0f 100644
+--- a/README-ZH_CN.MD
++++ b/README-ZH_CN.MD
+@@ -224,7 +224,7 @@ const COMPANY = "MoShang";
+ 
+ ​		这将启动一个Docker Compose堆栈，并将该项目部署在其中。请注意，此处将容器的8888端口和443端口映射		到了服务器上的8888端口和443端口。如果您希望使用其他端口，请相应地更改`docker-compose.yml`文件。
+ 
+-
++8、修改readme
+ 
+ ## License
+ 
+diff --git a/dev.sh b/dev.sh
+index 660a0b9..6f07065 100755
+--- a/dev.sh
++++ b/dev.sh
+@@ -5,3 +5,6 @@ docker run --rm -it \
+     -p 443:443 \
+     -v "$(pwd)"/server/data:/lottery/server/data/ \
+      lottery:$TAG
++
++
++#### To build the image, run:
+\ No newline at end of file

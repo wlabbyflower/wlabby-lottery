@@ -1,3 +1,4 @@
+import { THEMES, applyTheme, icon } from "../themes.js";
 import "./index.css";
 import "../css/animate.min.css";
 import "./canvas.js";
@@ -25,6 +26,9 @@ let TOTAL_CARDS,
   ROW_COUNT = 7,
   COLUMN_COUNT = 17,
   COMPANY,
+  screenConfig,
+  lastDrawType,
+  lastDrawUsers = [],
   HIGHLIGHT_CELL = [],
   // 当前的比例
   Resolution = 1;
@@ -62,55 +66,66 @@ initAll();
 /**
  * 初始化所有DOM
  */
-function initAll() {
-  window.AJAX({
-    url: "/getTempData",
-    success(data) {
-      // 获取基础数据
-      prizes = data.cfgData.prizes;
-      EACH_COUNT = data.cfgData.EACH_COUNT;
-      COMPANY = data.cfgData.COMPANY;
-      HIGHLIGHT_CELL = createHighlight();
-      basicData.prizes = prizes;
-      setPrizes(prizes);
-
-      TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
-
-      // 读取当前已设置的抽奖结果
-      basicData.leftUsers = data.leftUsers;
-      basicData.luckyUsers = data.luckyData;
-
-      let prizeIndex = basicData.prizes.length - 1;
-      for (; prizeIndex > -1; prizeIndex--) {
-        if (
-          data.luckyData[prizeIndex] &&
-          data.luckyData[prizeIndex].length >=
-            basicData.prizes[prizeIndex].count
-        ) {
-          continue;
-        }
-        currentPrizeIndex = prizeIndex;
-        currentPrize = basicData.prizes[currentPrizeIndex];
-        break;
-      }
-
-      showPrizeList(currentPrizeIndex);
-      let curLucks = basicData.luckyUsers[currentPrize.type];
-      setPrizeData(currentPrizeIndex, curLucks ? curLucks.length : 0, true);
-    }
-  });
-
-  window.AJAX({
-    url: "/getUsers",
-    success(data) {
-      basicData.users = data;
-
-      initCards();
-      // startMaoPao();
-      animate();
-      shineCard();
-    }
-  });
+async function initAll() {
+  try {
+    const data = await api('/getTempData');
+    screenConfig = data.cfgData;
+    prizes = screenConfig.prizes;
+    EACH_COUNT = screenConfig.EACH_COUNT;
+    COMPANY = screenConfig.COMPANY;
+    document.title = screenConfig.title;
+    document.querySelector('#eventTitle').textContent = screenConfig.title + ({weighted:' · 权重抽奖', designated:' · 定向抽取'}[screenConfig.mode] || '');
+    setupThemes(screenConfig.theme);
+    updateTelemetry(data);
+    HIGHLIGHT_CELL = createHighlight();
+    basicData = { prizes, users: data.users, leftUsers: data.leftUsers, luckyUsers: data.luckyData };
+    if (!basicData.users.length) throw new Error('请在活动设置中导入名单');
+    setPrizes(prizes);
+    TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
+    updatePrize();
+    initCards();
+    animate();
+    shineCard();
+  } catch (error) { addQipao('加载失败：' + error.message); }
+}
+function updateTelemetry(data) {
+  document.querySelector('#crewTotal').textContent = basicData.users.length || data.users.length;
+  document.querySelector('#crewAvailable').textContent = data.leftUsers.length;
+}
+function setupThemes(id) {
+  document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
+  const menu = document.querySelector('#themeMenu'), toggle = document.querySelector('#themeToggle');
+  function select(id) {
+    const selected = applyTheme(id);
+    document.querySelector('#themeLabel').textContent = selected.name;
+    menu.querySelectorAll('button').forEach(button => button.setAttribute('aria-checked', String(button.dataset.theme === selected.id)));
+  }
+  for (const theme of THEMES) {
+    const button = document.createElement('button'); button.dataset.theme = theme.id; button.setAttribute('role', 'menuitemradio');
+    button.innerHTML = `<span class="theme-dot" style="--swatch:${theme.accent}"></span><span>${theme.name}</span>`;
+    button.onclick = async () => {
+      try { await api('/theme', { theme: theme.id }); select(theme.id); menu.classList.add('none'); toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
+      catch(error) { addQipao('主题保存失败：' + error.message); }
+    }; menu.append(button);
+  }
+  toggle.onclick = () => { const open = menu.classList.toggle('none') === false; toggle.setAttribute('aria-expanded', String(open)); if(open) menu.querySelector('[aria-checked="true"]')?.focus(); };
+  document.addEventListener('click', event => { if(!event.target.closest('.theme-control')) { menu.classList.add('none'); toggle.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('keydown', event => { if(event.key === 'Escape' && !menu.classList.contains('none')) { menu.classList.add('none'); toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); } });
+  select(id);
+}
+function updatePrize() {
+  currentPrizeIndex = prizes.length - 1;
+  while (currentPrizeIndex >= 0 && (basicData.luckyUsers[prizes[currentPrizeIndex].type] || []).length >= prizes[currentPrizeIndex].count) currentPrizeIndex--;
+  if (currentPrizeIndex < 0) currentPrizeIndex = 0;
+  currentPrize = prizes[currentPrizeIndex];
+  resetPrize(currentPrizeIndex);
+  setPrizeData(currentPrizeIndex, (basicData.luckyUsers[currentPrize.type] || []).length, true);
+}
+async function api(url, data = {}) {
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+  const result = await response.json();
+  if (!response.ok || result.error) throw new Error(result.error || '请求失败');
+  return result;
 }
 
 function initCards() {
@@ -133,7 +148,7 @@ function initCards() {
     1,
     10000
   );
-  camera.position.z = 3000;
+  camera.position.z = Math.max(3000, COLUMN_COUNT * 190);
 
   scene = new THREE.Scene();
 
@@ -186,7 +201,7 @@ function initCards() {
   controls = new THREE.TrackballControls(camera, renderer.domElement);
   controls.rotateSpeed = 0.5;
   controls.minDistance = 500;
-  controls.maxDistance = 6000;
+  controls.maxDistance = Math.max(6000, COLUMN_COUNT * 220);
   controls.addEventListener("change", render);
 
   bindEvent();
@@ -206,100 +221,51 @@ function setLotteryStatus(status = false) {
  * 事件绑定
  */
 function bindEvent() {
-  document.querySelector("#menu").addEventListener("click", function (e) {
-    e.stopPropagation();
-    // 如果正在抽奖，则禁止一切操作
+  let busy = false;
+  document.querySelector('#menu').addEventListener('click', async e => {
+    const target = e.target.id;
     if (isLotting) {
-      if (e.target.id === "lottery") {
-        rotateObj.stop();
-        btns.lottery.innerHTML = "开始抽奖";
-      } else {
-        addQipao("正在抽奖，抽慢一点点～～");
+      if (target === 'lottery' && rotateObj && !busy) { rotateObj.stop(); btns.lottery.textContent = '开始抽奖'; }
+      return;
+    }
+    if (busy) return;
+    busy = true;
+    try {
+      switch (target) {
+        case 'enter':
+          removeHighlight(); switchScreen('lottery'); break;
+        case 'reset':
+          if (!confirm('确定清空所有中奖记录？请先导出结果。')) break;
+          await api('/reset'); location.reload(); break;
+        case 'lottery':
+          if (!basicData.leftUsers.length) throw new Error('没有剩余可抽奖人员');
+          if ((basicData.luckyUsers[currentPrize.type] || []).length >= currentPrize.count) throw new Error('所有奖项已抽完');
+          if (lastDrawType !== currentPrize.type && !confirm('开始抽取：' + currentPrize.text + ' ' + currentPrize.title + '？')) break;
+          setLotteryStatus(true);
+          await resetCard();
+          lottery(); break;
+        case 'reLottery': {
+          if (!lastDrawUsers.length) throw new Error('当前没有可补抽的结果');
+          const message = lastDrawUsers.map((u,i) => `${i+1}. ${u[1]}（${u[0]}）`).join('\n');
+          const input = prompt('输入未到场人员序号，用逗号分隔；留空重新抽取本轮全部：\n' + message, '');
+          if (input === null) break;
+          const indices = input.trim() ? input.split(/[,，\s]+/).map(n => Number(n)-1) : lastDrawUsers.map((_,i)=>i);
+          if (indices.some(i => !Number.isInteger(i) || !lastDrawUsers[i]) || new Set(indices).size !== indices.length) throw new Error('人员序号无效');
+          const result = await api('/redraw', { type: lastDrawType, ids: indices.map(i => lastDrawUsers[i][0]) });
+          setLotteryStatus(true);
+          await resetCard();
+          const retained = lastDrawUsers.filter(u => !indices.some(i => lastDrawUsers[i][0] === u[0]));
+          showResult(result, lastDrawType);
+          lastDrawUsers = retained.concat(result.users);
+          break;
+        }
+        case 'save':
+          await api('/export'); location.href = '/results.xlsx'; break;
       }
-      return false;
-    }
-
-    let target = e.target.id;
-    switch (target) {
-      // 显示数字墙
-      case "welcome":
-        switchScreen("enter");
-        rotate = false;
-        break;
-      // 进入抽奖
-      case "enter":
-        removeHighlight();
-        addQipao(`马上抽取[${currentPrize.title}],不要走开。`);
-        // rotate = !rotate;
-        rotate = true;
-        switchScreen("lottery");
-        break;
-      // 重置
-      case "reset":
-        let doREset = window.confirm(
-          "是否确认重置数据，重置后，当前已抽的奖项全部清空？"
-        );
-        if (!doREset) {
-          return;
-        }
-        addQipao("重置所有数据，重新抽奖");
-        addHighlight();
-        resetCard();
-        // 重置所有数据
-        currentLuckys = [];
-        basicData.leftUsers = Object.assign([], basicData.users);
-        basicData.luckyUsers = {};
-        currentPrizeIndex = basicData.prizes.length - 1;
-        currentPrize = basicData.prizes[currentPrizeIndex];
-
-        resetPrize(currentPrizeIndex);
-        reset();
-        switchScreen("enter");
-        break;
-      // 抽奖
-      case "lottery":
-        setLotteryStatus(true);
-        // 每次抽奖前先保存上一次的抽奖数据
-        saveData();
-        //更新剩余抽奖数目的数据显示
-        changePrize();
-        resetCard().then(res => {
-          // 抽奖
-          lottery();
-        });
-        addQipao(`正在抽取[${currentPrize.title}],调整好姿势`);
-        break;
-      // 重新抽奖
-      case "reLottery":
-        if (currentLuckys.length === 0) {
-          addQipao(`当前还没有抽奖，无法重新抽取喔~~`);
-          return;
-        }
-        setErrorData(currentLuckys);
-        addQipao(`重新抽取[${currentPrize.title}],做好准备`);
-        setLotteryStatus(true);
-        // 重新抽奖则直接进行抽取，不对上一次的抽奖数据进行保存
-        // 抽奖
-        resetCard().then(res => {
-          // 抽奖
-          lottery();
-        });
-        break;
-      // 导出抽奖结果
-      case "save":
-        saveData().then(res => {
-          resetCard().then(res => {
-            // 将之前的记录置空
-            currentLuckys = [];
-          });
-          exportData();
-          addQipao(`数据已保存到EXCEL中。`);
-        });
-        break;
-    }
+    } catch (error) { setLotteryStatus(false); addQipao(error.message); }
+    finally { busy = false; }
   });
-
-  window.addEventListener("resize", onWindowResize, false);
+  window.addEventListener('resize', onWindowResize, false);
 }
 
 function switchScreen(type) {
@@ -310,6 +276,8 @@ function switchScreen(type) {
       transform(targets.table, 2000);
       break;
     default:
+      camera.position.set(0, 0, 3000);
+      camera.lookAt(new THREE.Vector3());
       btns.enter.classList.add("none");
       btns.lotteryBar.classList.remove("none");
       transform(targets.sphere, 2000);
@@ -321,9 +289,9 @@ function switchScreen(type) {
  * 创建元素
  */
 function createElement(css, text) {
-  let dom = document.createElement("div");
-  dom.className = css || "";
-  dom.innerHTML = text || "";
+  const dom = document.createElement('div');
+  dom.className = css || '';
+  dom.textContent = text || '';
   return dom;
 }
 
@@ -349,7 +317,7 @@ function createCard(user, isBold, id, showTable) {
 
   element.appendChild(createElement("name", user[1]));
 
-  element.appendChild(createElement("details", user[0] + "<br/>" + user[2]));
+  element.appendChild(createElement("details", user[0] + " · " + (user[2] || "")));
   return element;
 }
 
@@ -369,7 +337,7 @@ function addHighlight() {
  * 渲染地球等
  */
 function transform(targets, duration) {
-  // TWEEN.removeAll();
+  TWEEN.removeAll();
   for (var i = 0; i < threeDCards.length; i++) {
     var object = threeDCards[i];
     var target = targets[i];
@@ -399,7 +367,7 @@ function transform(targets, duration) {
       .start();
   }
 
-  new TWEEN.Tween(this)
+  new TWEEN.Tween({})
     .to({}, duration * 2)
     .onUpdate(render)
     .start();
@@ -473,42 +441,23 @@ function render() {
 
 function selectCard(duration = 600) {
   rotate = false;
+  controls.enabled = false;
+  TWEEN.removeAll();
+  camera.position.set(0, 0, 3000);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(new THREE.Vector3());
+  scene.rotation.set(0, 0, 0);
   let width = 140,
     tag = -(currentLuckys.length - 1) / 2,
     locates = [];
 
-  // 计算位置信息, 大于5个分两排显示
-  if (currentLuckys.length > 5) {
-    let yPosition = [-87, 87],
-      l = selectedCardIndex.length,
-      mid = Math.ceil(l / 2);
-    tag = -(mid - 1) / 2;
-    for (let i = 0; i < mid; i++) {
-      locates.push({
-        x: tag * width * Resolution,
-        y: yPosition[0] * Resolution
-      });
-      tag++;
-    }
-
-    tag = -(l - mid - 1) / 2;
-    for (let i = mid; i < l; i++) {
-      locates.push({
-        x: tag * width * Resolution,
-        y: yPosition[1] * Resolution
-      });
-      tag++;
-    }
-  } else {
-    for (let i = selectedCardIndex.length; i > 0; i--) {
-      locates.push({
-        x: tag * width * Resolution,
-        y: 0 * Resolution
-      });
-      tag++;
-    }
+  const columns = Math.min(5, currentLuckys.length);
+  const rows = Math.ceil(currentLuckys.length / columns);
+  const spacing = Math.min(140, 650 / columns);
+  for (let i = 0; i < currentLuckys.length; i++) {
+    const row = Math.floor(i / columns), rowLength = Math.min(columns, currentLuckys.length - row * columns);
+    locates.push({ x: ((i % columns) - (rowLength - 1)/2) * spacing, y: ((rows - 1)/2 - row) * 180 });
   }
-
   let text = currentLuckys.map(item => item[1]);
   addQipao(
     `恭喜${text.join("、")}获得${currentPrize.title}, 新的一年必定旺旺旺。`
@@ -522,7 +471,7 @@ function selectCard(duration = 600) {
         {
           x: locates[index].x,
           y: locates[index].y * Resolution,
-          z: 2200
+          z: Math.min(2200, 3000 - Math.max(800, Math.ceil(currentLuckys.length/5) * 270))
         },
         Math.random() * duration + duration
       )
@@ -541,16 +490,17 @@ function selectCard(duration = 600) {
       .easing(TWEEN.Easing.Exponential.InOut)
       .start();
 
-    object.element.classList.add("prize");
+
     tag++;
   });
 
-  new TWEEN.Tween(this)
+  new TWEEN.Tween({})
     .to({}, duration * 2)
     .onUpdate(render)
     .start()
     .onComplete(() => {
-      // 动画结束后可以操作
+      selectedCardIndex.forEach(i => threeDCards[i].element.classList.add("prize"));
+      document.body.classList.add("showing-winners");
       setLotteryStatus();
     });
 }
@@ -559,6 +509,8 @@ function selectCard(duration = 600) {
  * 重置抽奖牌内容
  */
 function resetCard(duration = 500) {
+  controls.enabled = true;
+  document.body.classList.remove("showing-winners");
   if (currentLuckys.length === 0) {
     return Promise.resolve();
   }
@@ -593,7 +545,7 @@ function resetCard(duration = 500) {
   });
 
   return new Promise((resolve, reject) => {
-    new TWEEN.Tween(this)
+    new TWEEN.Tween({})
       .to({}, duration * 2)
       .onUpdate(render)
       .start()
@@ -611,88 +563,36 @@ function resetCard(duration = 500) {
  * 抽奖
  */
 function lottery() {
-  // if (isLotting) {
-  //   rotateObj.stop();
-  //   btns.lottery.innerHTML = "开始抽奖";
-  //   return;
-  // }
-  btns.lottery.innerHTML = "结束抽奖";
-  rotateBall().then(() => {
-    // 将之前的记录置空
-    currentLuckys = [];
-    selectedCardIndex = [];
-    // 当前同时抽取的数目,当前奖品抽完还可以继续抽，但是不记录数据
-    let perCount = EACH_COUNT[currentPrizeIndex],
-      luckyData = basicData.luckyUsers[currentPrize.type],
-      leftCount = basicData.leftUsers.length,
-      leftPrizeCount = currentPrize.count - (luckyData ? luckyData.length : 0);
-
-    if (leftCount < perCount) {
-      addQipao("剩余参与抽奖人员不足，现在重新设置所有人员可以进行二次抽奖！");
-      basicData.leftUsers = basicData.users.slice();
-      leftCount = basicData.leftUsers.length;
-    }
-
-    for (let i = 0; i < perCount; i++) {
-      let luckyId = random(leftCount);
-      currentLuckys.push(basicData.leftUsers.splice(luckyId, 1)[0]);
-      leftCount--;
-      leftPrizeCount--;
-
-      let cardIndex = random(TOTAL_CARDS);
-      while (selectedCardIndex.includes(cardIndex)) {
-        cardIndex = random(TOTAL_CARDS);
-      }
-      selectedCardIndex.push(cardIndex);
-
-      if (leftPrizeCount === 0) {
-        break;
-      }
-    }
-
-    // console.log(currentLuckys);
-    selectCard();
+  btns.lottery.textContent = '结束抽奖';
+  const type = currentPrize.type;
+  rotateBall().then(async () => {
+    try {
+      const result = await api('/draw', { type });
+      showResult(result, type);
+    } catch (error) { addQipao(error.message); setLotteryStatus(false); }
+    finally { btns.lottery.textContent = '开始抽奖'; }
   });
+}
+function showResult(result, type) {
+  updateTelemetry(result);
+  basicData.leftUsers = result.leftUsers;
+  basicData.luckyUsers = result.luckyData;
+  currentLuckys = result.users;
+  lastDrawUsers = result.users;
+  lastDrawType = type;
+  currentPrize = prizes.find(p => p.type === type);
+  selectedCardIndex = [];
+  while (selectedCardIndex.length < currentLuckys.length) {
+    const index = random(TOTAL_CARDS);
+    if (!selectedCardIndex.includes(index)) selectedCardIndex.push(index);
+  }
+  selectCard();
+  updatePrize();
 }
 
 /**
  * 保存上一次的抽奖结果
  */
-function saveData() {
-  if (!currentPrize) {
-    //若奖品抽完，则不再记录数据，但是还是可以进行抽奖
-    return;
-  }
-
-  let type = currentPrize.type,
-    curLucky = basicData.luckyUsers[type] || [];
-
-  curLucky = curLucky.concat(currentLuckys);
-
-  basicData.luckyUsers[type] = curLucky;
-
-  if (currentPrize.count <= curLucky.length) {
-    currentPrizeIndex--;
-    if (currentPrizeIndex <= -1) {
-      currentPrizeIndex = 0;
-    }
-    currentPrize = basicData.prizes[currentPrizeIndex];
-  }
-
-  if (currentLuckys.length > 0) {
-    // todo by xc 添加数据保存机制，以免服务器挂掉数据丢失
-    return setData(type, currentLuckys);
-  }
-  return Promise.resolve();
-}
-
-function changePrize() {
-  let luckys = basicData.luckyUsers[currentPrize.type];
-  let luckyCount = (luckys ? luckys.length : 0) + EACH_COUNT[currentPrizeIndex];
-  // 修改左侧prize的数目和百分比
-  setPrizeData(currentPrizeIndex, luckyCount);
-}
-
 /**
  * 随机抽奖
  */
@@ -705,11 +605,12 @@ function random(num) {
  * 切换名牌人员信息
  */
 function changeCard(cardIndex, user) {
-  let card = threeDCards[cardIndex].element;
-
-  card.innerHTML = `<div class="company">${COMPANY}</div><div class="name">${
-    user[1]
-  }</div><div class="details">${user[0] || ""}<br/>${user[2] || "PSST"}</div>`;
+  if (!user) return;
+  const card = threeDCards[cardIndex].element;
+  card.replaceChildren(createElement('company', COMPANY), createElement('name', user[1]), createElement('details', user[0] + ' · ' + (user[2] || '')));
+  if (user[3] && /^https?:\/\//i.test(user[3])) {
+    const photo = document.createElement('img'); photo.src = user[3]; photo.className = 'employee-photo'; photo.alt = user[1]; card.appendChild(photo);
+  }
 }
 
 /**
@@ -734,6 +635,7 @@ function shineCard() {
     if (isLotting) {
       return;
     }
+    if (document.hidden || !basicData.leftUsers.length) return;
     maxUser = basicData.leftUsers.length;
     for (let i = 0; i < shineCard; i++) {
       let index = random(maxUser),
@@ -748,78 +650,22 @@ function shineCard() {
   }, 500);
 }
 
-function setData(type, data) {
-  return new Promise((resolve, reject) => {
-    window.AJAX({
-      url: "/saveData",
-      data: {
-        type,
-        data
-      },
-      success() {
-        resolve();
-      },
-      error() {
-        reject();
-      }
-    });
-  });
-}
-
-function setErrorData(data) {
-  return new Promise((resolve, reject) => {
-    window.AJAX({
-      url: "/errorData",
-      data: {
-        data
-      },
-      success() {
-        resolve();
-      },
-      error() {
-        reject();
-      }
-    });
-  });
-}
-
-function exportData() {
-  window.AJAX({
-    url: "/export",
-    success(data) {
-      if (data.type === "success") {
-        location.href = data.url;
-      }
-    }
-  });
-}
-
-function reset() {
-  window.AJAX({
-    url: "/reset",
-    success(data) {
-      console.log("重置成功");
-    }
-  });
-}
-
 function createHighlight() {
-  let year = new Date().getFullYear() + "";
-  let step = 4,
-    xoffset = 1,
-    yoffset = 1,
-    highlight = [];
-
-  year.split("").forEach(n => {
-    highlight = highlight.concat(
-      NUMBER_MATRIX[n].map(item => {
-        return `${item[0] + xoffset}-${item[1] + yoffset}`;
-      })
-    );
-    xoffset += step;
-  });
-
-  return highlight;
+  const text = screenConfig.highlight || String(new Date().getFullYear());
+  if (/^\d{4}$/.test(text)) {
+    return text.split('').flatMap((n,i) => NUMBER_MATRIX[n].map(([x,y]) => `${x + 1 + i*4}-${y + 1}`));
+  }
+  ROW_COUNT = 11;
+  COLUMN_COUNT = Math.max(17, Array.from(text).length * 9 + 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = COLUMN_COUNT; canvas.height = ROW_COUNT;
+  const context = canvas.getContext('2d');
+  context.font = 'bold 9px sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
+  context.fillText(text, COLUMN_COUNT/2, ROW_COUNT/2);
+  const pixels = context.getImageData(0, 0, COLUMN_COUNT, ROW_COUNT).data;
+  const cells = [];
+  for(let y = 0; y < ROW_COUNT; y++) for(let x = 0; x < COLUMN_COUNT; x++) if(pixels[(y*COLUMN_COUNT+x)*4+3] > 100) cells.push(`${x}-${y}`);
+  return cells;
 }
 
 let onload = window.onload;
@@ -839,8 +685,8 @@ window.onload = function () {
         return;
       }
       rotated = rotated % 360;
-      musicBox.style.transform = "rotate(" + rotated + "deg)";
-      rotated += 1;
+      musicBox.style.color = "var(--accent)";
+      rotated += 0;
       animate();
     });
   }
@@ -866,7 +712,5 @@ window.onload = function () {
     false
   );
 
-  setTimeout(function () {
-    musicBox.click();
-  }, 1000);
+  musicBox.addEventListener("keydown", event => { if(event.key === "Enter" || event.key === " ") { event.preventDefault(); musicBox.click(); } });
 };

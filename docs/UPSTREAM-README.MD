@@ -1,3 +1,5 @@
+> 上游原始说明存档；旧安装步骤与 Docker 示例可能过时。当前版本请阅读仓库根目录 [README.md](../README.md)。
+
 # Lottery program
 
 Annual dinner lottery program, 3D sphere raffle, support for configuration of prize information, import participants information by `Excel`, and export lottery results by `Excel`

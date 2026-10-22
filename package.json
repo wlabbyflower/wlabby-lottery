@@ -1,0 +1,13 @@
+{
+  "name": "moshang-lottery-local",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix product run build",
+    "start": "node server/index.js",
+    "test": "node --test server/*.test.js",
+    "install:all": "npm --prefix server ci && npm --prefix product ci"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

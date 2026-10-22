@@ -1,0 +1,58 @@
+usage: |
+  默认提供示例名单。请点击左上角齿轮进入设置，导入正式名单并设置奖项后再开奖。
+  所有获授权用户共享同一场活动，建议仅由一位主持人操作。
+  中奖记录与设置持久保存，重置前请先导出备份。
+application:
+  subdomain: wlabby-lottery
+  image: embed:lottery
+  run_as: "1000:1000"
+  workdir: /app
+  environment:
+    HOST: 0.0.0.0
+    PORT: "8888"
+    LOTTERY_DATA_DIR: /lzcapp/var/lottery
+    LOTTERY_TRUST_PROXY: "1"
+    LOTTERY_PUBLIC_ORIGIN: "https://{{ .S.AppDomain }}"
+  routes:
+    - /=exec://8888,/app/run.sh
+  entries:
+    - id: settings
+      title: 活动设置
+      path: /admin.html
+  health_check:
+    test_url: http://127.0.0.1:8888/health
+    start_period: 60s
+    timeout: 5s
+  injects:
+    - id: lazycat-file-bridge
+      on: request
+      when:
+        - /__lazycat_file_bridge/*
+      do:
+        - src: |
+            const bridgePrefix = "/__lazycat_file_bridge";
+            const requestHost = String(ctx.request.host || "").split(":")[0].toLowerCase();
+            const firstDot = requestHost.indexOf(".");
+            const method = String(ctx.request.method || "").toUpperCase();
+            if (firstDot <= 0 || !requestHost.endsWith(".heiyu.space") || !["GET", "HEAD", "PUT"].includes(method)) {
+              ctx.response.send(["GET", "HEAD", "PUT"].includes(method) ? 400 : 405, "Invalid LazyCat file bridge request");
+              return;
+            }
+            ctx.headers.del("Origin");
+            ctx.headers.del("Referer");
+            ctx.proxy.to("https://file." + requestHost.slice(firstDot + 1), {
+              path: "/files/home" + ctx.request.path.slice(bridgePrefix.length),
+              query: ctx.request.raw_query,
+              use_target_host: true,
+              timeout_ms: 120000,
+              on_fail: "error",
+            });
+    - id: open-save-chooser
+      on: browser
+      when:
+        - /*
+      do:
+        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
+          params:
+            fileBridgeRoot: /__lazycat_file_bridge
+            locale: auto

@@ -1,0 +1,24 @@
+diff --git a/README-ZH_CN.MD b/README-ZH_CN.MD
+index 50883f6..fcdc170 100644
+--- a/README-ZH_CN.MD
++++ b/README-ZH_CN.MD
+@@ -48,6 +48,7 @@ cd ../product
+ npm install
+ 
+ # 打包
++cd ../
+ npm run build
+ 
+ # 运行
+diff --git a/README.MD b/README.MD
+index 38a3311..37afefb 100644
+--- a/README.MD
++++ b/README.MD
+@@ -50,6 +50,7 @@ cd ../product
+ npm install
+ 
+ # Package
++cd ../
+ npm run build
+ 
+ # Running

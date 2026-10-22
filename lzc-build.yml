@@ -1,0 +1,9 @@
+manifest: ./lzc-manifest.yml
+pkgout: ./artifacts
+icon: ./lpk/icon.png
+contentdir: ./lpk/content
+images:
+  lottery:
+    context: .
+    dockerfile: ./Dockerfile
+    upstream-match: registry.lazycat.cloud

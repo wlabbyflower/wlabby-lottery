@@ -3,3 +3,17 @@ node_modules/
 dist/
 temp.json
 error.json
+server/cache/
+*.log
+
+# Packaging outputs and local credentials
+artifacts/
+*.lpk
+.lzc-docker*
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+
+.lzc-cli-cache/

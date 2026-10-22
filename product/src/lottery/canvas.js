@@ -1,106 +1,23 @@
-(function () {
-  //based on an Example by @curran
-  window.requestAnimFrame = (function () {
-    return window.requestAnimationFrame;
-  })();
-  var canvas = document.getElementById("canvas");
-
-  ~~(function setSize() {
-    //定义canvas的宽高，让他跟浏览器的窗口的宽高相同
-    window.onresize = arguments.callee;
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = w;
-    canvas.height = h;
-  })();
-
-  var c = canvas.getContext("2d");
-
-  var numStars = 800;
-  var radius = "0." + Math.floor(Math.random() * 9) + 1;
-  var focalLength = canvas.width * 2;
-  var warp = 0;
-  var centerX, centerY;
-
-  var stars = [],
-    star;
-  var i;
-
-  var animate = true;
-
-  initializeStars();
-
-  function executeFrame() {
-    if (animate) requestAnimFrame(executeFrame);
-    moveStars();
-    drawStars();
+const canvas = document.getElementById('canvas');
+const context = canvas.getContext('2d');
+let width, height, stars = [];
+function resize() {
+  width = canvas.width = innerWidth; height = canvas.height = innerHeight;
+  stars = Array.from({length: Math.min(320, Math.floor(width * height / 5000))}, () => ({ x: Math.random()*width, y: Math.random()*height, r: Math.random()*1.2+.25, phase: Math.random()*6.3, speed: Math.random()*.08+.02 }));
+}
+resize(); window.addEventListener('resize', resize);
+let previous = 0;
+function frame(time) {
+  requestAnimationFrame(frame);
+  if (document.hidden || time - previous < 33) return;
+  previous = time;
+  context.fillStyle = window.lotteryBackground || '#050a18'; context.fillRect(0,0,width,height);
+  const rgb = window.lotteryStarColor || '112,217,255';
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (const star of stars) {
+    if(!reduced) { star.y += star.speed; if(star.y > height) star.y = 0; }
+    context.fillStyle = `rgba(${rgb},${.18 + (1 + Math.sin(time*.0006 + star.phase))*.22})`;
+    context.beginPath(); context.arc(star.x,star.y,star.r,0,Math.PI*2); context.fill();
   }
-
-  function initializeStars() {
-    centerX = canvas.width / 2;
-    centerY = canvas.height / 2;
-
-    stars = [];
-    for (i = 0; i < numStars; i++) {
-      star = {
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        z: Math.random() * canvas.width,
-        o: "0." + Math.floor(Math.random() * 99) + 1
-      };
-      stars.push(star);
-    }
-  }
-
-  function moveStars() {
-    for (i = 0; i < numStars; i++) {
-      star = stars[i];
-      star.z--;
-
-      if (star.z <= 0) {
-        star.z = canvas.width;
-      }
-    }
-  }
-
-  function drawStars() {
-    var pixelX, pixelY, pixelRadius;
-
-    // Resize to the screen
-    if (
-      canvas.width != window.innerWidth ||
-      canvas.width != window.innerWidth
-    ) {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      initializeStars();
-    }
-    if (warp == 0) {
-      c.fillStyle = "rgba(0,10,20,1)";
-      c.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    c.fillStyle = "rgba(209, 255, 255, " + radius + ")";
-    for (i = 0; i < numStars; i++) {
-      star = stars[i];
-
-      pixelX = (star.x - centerX) * (focalLength / star.z);
-      pixelX += centerX;
-      pixelY = (star.y - centerY) * (focalLength / star.z);
-      pixelY += centerY;
-      pixelRadius = 1 * (focalLength / star.z);
-
-      c.fillRect(pixelX, pixelY, pixelRadius, pixelRadius);
-      c.fillStyle = "rgba(209, 255, 255, " + star.o + ")";
-      //c.fill();
-    }
-  }
-
-  // document.getElementById('warp').addEventListener("click", function(e) {
-  //     window.c.beginPath();
-  //     window.c.clearRect(0, 0, window.canvas.width, window.canvas.height);
-  //     window.warp = warp ? 0 : 1;
-  //     executeFrame();
-  // });
-
-  executeFrame();
-})();
+}
+requestAnimationFrame(frame);

@@ -1,0 +1,32 @@
+package: cloud.lazycat.app.wlabby.lottery
+version: 1.0.0
+name: 星际抽奖
+description: 太空科技风格的活动抽奖，支持四套主题、Excel 名单导入、奖品配置、单人补抽和结果导出。
+author: wlabbyflower（基于 moshang-ax/lottery）
+license: MIT
+homepage: https://github.com/wlabbyflower/wlabby-lottery
+min_os_version: 1.6.0
+permissions:
+  required: []
+  optional: []
+locales:
+  zh-CN:
+    name: 星际抽奖
+    description: 四套太空主题的活动抽奖，支持名单导入、奖项配置与结果持久化。
+    usage: |
+      默认提供示例名单。请点击左上角齿轮进入设置，导入正式名单并设置奖项后再开奖。
+      所有获授权用户共享同一场活动，建议仅由一位主持人操作。
+      中奖记录与设置持久保存，重置前请先导出备份。
+    entries:
+      settings:
+        title: 活动设置
+  en-US:
+    name: Orbital Lottery
+    description: Event lottery with four space themes, Excel import, configurable prizes and persistent results.
+    usage: |
+      The initial roster contains demo participants. Open Settings to import your roster and configure prizes before drawing.
+      Authorized users share one event; use one host to operate the draw.
+      Results and settings persist across restarts. Export results before resetting.
+    entries:
+      settings:
+        title: Event settings

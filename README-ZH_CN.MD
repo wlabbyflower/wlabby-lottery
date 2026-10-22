@@ -1,3 +1,7 @@
+> 当前版本请优先阅读 [README.md](README.md)。以下保留上游中文文档作为历史参考。
+
+> 本地整合版请优先阅读 [启动与使用说明](docs/LOCAL-RUN.md) 和 [全部 PR/issue 处理对照](docs/UPSTREAM-REVIEW.md)。以下保留上游原始说明，旧 Webpack 安装步骤已由 Vite 替代。
+
 # 抽奖程序
 
 年会抽奖程序，3D 球体抽奖，支持奖品信息配置，参与抽奖人员信息`Excel`导入，抽奖结果`Excel`导出

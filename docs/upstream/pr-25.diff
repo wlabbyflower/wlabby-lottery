@@ -1,0 +1,66 @@
+diff --git a/product/src/lottery/index.css b/product/src/lottery/index.css
+index defcd01..3997953 100644
+--- a/product/src/lottery/index.css
++++ b/product/src/lottery/index.css
+@@ -346,6 +346,11 @@ button:active {
+   transform: translateY(-50%);
+ }
+ 
++.hidden {
++  display:none;
++  list-style-type:none;
++}
++
+ .shine {
+   box-shadow: 0 0 15px 0 rgba(0, 255, 255, 0.5);
+   transform: scale(1.2);
+diff --git a/product/src/lottery/prizeList.js b/product/src/lottery/prizeList.js
+index c84ebac..04d82b7 100644
+--- a/product/src/lottery/prizeList.js
++++ b/product/src/lottery/prizeList.js
+@@ -21,7 +21,8 @@ const DEFAULT_MESS = [
+ let lastDanMuList = [];
+ 
+ let prizeElement = {},
+-  lasetPrizeIndex = 0;
++  lasetPrizeIndex = 0,
++  skipPrizeIndex = 0;
+ class DanMu {
+   constructor(option) {
+     if (typeof option !== "object") {
+@@ -155,6 +156,8 @@ function setPrizes(pri) {
+ 
+ function showPrizeList(currentPrizeIndex) {
+   let currentPrize = prizes[currentPrizeIndex];
++  let readySkipCount = currentPrizeIndex - 6;
++  skipPrizeIndex = readySkipCount;
+   if (currentPrize.type === defaultType) {
+     currentPrize.count === "不限制";
+   }
+@@ -163,9 +166,10 @@ function showPrizeList(currentPrizeIndex) {
+     if (item.type === defaultType) {
+       return true;
+     }
+-    htmlCode += `<li id="prize-item-${item.type}" class="prize-item ${
+-      item.type == currentPrize.type ? "shine" : ""
+-    }">
++    htmlCode += `<li id="prize-item-${item.type}" class="prize-item 
++      ${item.type == currentPrize.type ? "shine" : ""}
++      ${--readySkipCount > 0 ? "hidden" : ""}
++    ">
+                         <span></span><span></span><span></span><span></span>
+                         <div class="prize-img">
+                             <img src="${item.img}" alt="${item.title}">
+@@ -244,6 +248,12 @@ let setPrizeData = (function () {
+       prizeElement.prizeText.textContent = currentPrize.title;
+ 
+       lasetPrizeIndex = currentPrizeIndex;
++
++      if (skipPrizeIndex > 0) {
++        let newPrize = prizes[skipPrizeIndex--];
++        let newBox = document.querySelector(`#prize-item-${newPrize.type}`);
++        newBox.classList.remove("hidden");
++      }
+     }
+ 
+     if (currentPrizeIndex === 0) {

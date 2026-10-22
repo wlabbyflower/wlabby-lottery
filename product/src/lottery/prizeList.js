@@ -1,3 +1,4 @@
+const escapeHTML = value => String(value ?? "").replace(/[&<>"\']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "\'":"&#39;"}[c]));
 const MAX_TOP = 300,
   MAX_WIDTH = document.body.clientWidth;
 
@@ -148,7 +149,7 @@ let addQipao = (() => {
 })();
 
 function setPrizes(pri) {
-  prizes = pri;
+  prizes = pri.map(p => ({ ...p, text: escapeHTML(p.text), title: escapeHTML(p.title), img: escapeHTML(p.img) }));
   defaultType = prizes[0]["type"];
   lasetPrizeIndex = pri.length - 1;
 }
@@ -160,15 +161,13 @@ function showPrizeList(currentPrizeIndex) {
   }
   let htmlCode = `<div class="prize-mess">正在抽取<label id="prizeType" class="prize-shine">${currentPrize.text}</label><label id="prizeText" class="prize-shine">${currentPrize.title}</label>，剩余<label id="prizeLeft" class="prize-shine">${currentPrize.count}</label>个</div><ul class="prize-list">`;
   prizes.forEach(item => {
-    if (item.type === defaultType) {
-      return true;
-    }
+
     htmlCode += `<li id="prize-item-${item.type}" class="prize-item ${
       item.type == currentPrize.type ? "shine" : ""
     }">
                         <span></span><span></span><span></span><span></span>
                         <div class="prize-img">
-                            <img src="${item.img}" alt="${item.title}">
+                            <img src="${item.img || "/img/gift.svg"}" alt="${item.title}">
                         </div>
                         <div class="prize-text">
                             <h5 class="prize-title">${item.text} ${
@@ -237,20 +236,13 @@ let setPrizeData = (function () {
     if (lasetPrizeIndex !== currentPrizeIndex) {
       let lastPrize = prizes[lasetPrizeIndex],
         lastBox = document.querySelector(`#prize-item-${lastPrize.type}`);
-      lastBox.classList.remove("shine");
-      lastBox.classList.add("done");
+      lastBox?.classList.remove("shine");
+      lastBox?.classList.add("done");
       elements.box && elements.box.classList.add("shine");
       prizeElement.prizeType.textContent = currentPrize.text;
       prizeElement.prizeText.textContent = currentPrize.title;
 
       lasetPrizeIndex = currentPrizeIndex;
-    }
-
-    if (currentPrizeIndex === 0) {
-      prizeElement.prizeType.textContent = "特别奖";
-      prizeElement.prizeText.textContent = " ";
-      prizeElement.prizeLeft.textContent = "不限制";
-      return;
     }
 
     count = totalCount - count;
@@ -259,6 +251,7 @@ let setPrizeData = (function () {
     elements.bar && (elements.bar.style.width = percent * 100 + "%");
     elements.text && (elements.text.textContent = count + "/" + totalCount);
     prizeElement.prizeLeft.textContent = count;
+    elements.box?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
 })();
 
@@ -277,7 +270,7 @@ function startMaoPao() {
           ? lastDanMuList.shift()
           : DEFAULT_MESS[index++];
       item.start(text);
-      index = index > len ? 0 : index;
+      index = index >= len ? 0 : index;
     });
   }
 
@@ -289,12 +282,12 @@ function startMaoPao() {
           onComplete: function () {
             setTimeout(() => {
               this.start(DEFAULT_MESS[index++]);
-              index = index > len ? 0 : index;
+              index = index >= len ? 0 : index;
             }, 1000);
           }
         })
       );
-      index = index > len ? 0 : index;
+      index = index >= len ? 0 : index;
     }, 1500 * i);
   }
 }

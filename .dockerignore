@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/dist
+server/cache
+*.log
+docs/upstream
+
+artifacts
+*.lpk
+.env
+.env.*
+lpk/content
+
+.lzc-cli-cache/
