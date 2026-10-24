@@ -24,8 +24,10 @@ const server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path'
  const invalid=await fetch(base+'/importUsers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:[['1','甲','','',100]]})});assert.equal(invalid.status,400);
  await api('/importUsers',{users:snapshot.users});
  await page.goto(base);await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
- assert.equal(await page.locator('.person-preview-card').count(),12);
- assert.ok(await page.locator('.person-name').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>=30);
+ assert.equal(await page.locator('.person-preview-card').count(),24);
+ assert.ok(await page.locator('.person-name').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>=20);
+ const shape=await page.locator('.person-preview-card').first().boundingBox();assert.ok(shape.height>shape.width);
+ const initialNames=await page.locator('.person-id').allTextContents();await page.waitForTimeout(3400);assert.notDeepEqual(await page.locator('.person-id').allTextContents(),initialNames);
  const first=await page.locator('.person-id').allTextContents();await page.click('#previewNext');assert.notDeepEqual(await page.locator('.person-id').allTextContents(),first);
  await page.click('#previewPrevious');assert.deepEqual(await page.locator('.person-id').allTextContents(),first);
  await page.click('#previewPause');assert.equal(await page.getAttribute('#previewPause','aria-pressed'),'true');
@@ -63,6 +65,7 @@ const server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path'
  await page.click('[data-panel="appearance"]');assert.equal(await page.locator('.theme-choice').count(),4);
  for(const id of ['violet','aurora','solar','nebula']){await page.click(`[data-id="${id}"]`);assert.equal(await page.locator('html').getAttribute('data-theme'),id);}
  await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));await page.screenshot({path:'/tmp/lottery-bright-settings.png'});
+ for(const selector of ['.back-screen','.header-actions [data-return-screen]']) {await page.goto(base+'/admin.html');await page.setViewportSize({width:1366,height:600});await page.locator(selector).click();await page.waitForURL(base+'/');assert.equal(browser.contexts()[0].pages().length,1);}
  await page.goto(base);await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/lottery-bright-mobile.png'});
- assert.deepEqual(errors,[]);console.log('PASS: readable 12-person preview, paging, four-column Excel round trip, unfair API rejection, '+mode.mode+' rendering, sphere drag/zoom, draw, cross-prize exclusion, redraw, final results and reload, export, themes and mobile layout');
+ assert.deepEqual(errors,[]);console.log('PASS: compact 24-person portrait preview, paging, four-column Excel round trip, unfair API rejection, '+mode.mode+' rendering, sphere drag/zoom, draw, cross-prize exclusion, redraw, final results and reload, export, themes and mobile layout');
 }finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true})}})().catch(e=>{console.error(e);process.exitCode=1});

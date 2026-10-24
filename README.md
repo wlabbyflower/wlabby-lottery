@@ -13,7 +13,7 @@
 ## 本版改动
 
 - 四套明亮主题：晴空蓝、柔雾紫、清新绿、暖金庆典，支持即时切换。
-- 中间默认显示 12 张大字号人员名牌，支持翻页、自动轮播与暂停；可切换 119 张卡片的 3D 球体，支持鼠标拖动、滚轮缩放及触屏滑动。
+- 中间默认显示 24 张紧凑竖向人员名牌，每 3 秒自动轮播，支持翻页与暂停；可切换 119 张卡片的 3D 球体，支持鼠标拖动、滚轮缩放及触屏滑动。
 - 球体使用 WebGL2 实例化绘制；无 WebGL2 时回退 CSS3D。静态名牌预览不连续绘制 3D 场景。
 - 左上角齿轮及左侧分类设置；奖品栏可收起，活动标题、公司名称及预览标题可配置。
 - 服务端等概率无放回抽样，整场跨奖项不重复中奖；删除权重、定向与重复中奖选项，接口也拒绝启用。见 [公平性说明](docs/FAIRNESS.md)。
@@ -47,12 +47,12 @@ npm start
 
 ```bash
 mkdir -p artifacts
-lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
-lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
-lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
+lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.6-amd64.lpk
+lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.6-amd64.lpk
+lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.6-amd64.lpk
 ```
 
-- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.5`。
+- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.6`。
 - LPK v2 采用 `embed:lottery` 打包应用层；运行不依赖开发电脑。基础镜像层通过已固定的懒猫 Registry 镜像获取。
 - 数据保存在微服 `/lzcapp/var/lottery/`，包括名单、设置和中奖记录；不会把开发电脑现有活动数据打入安装包。
 - 应用通过微服账号鉴权，无额外应用登录。所有获授权用户共享同一场活动，建议由一位主持人操作。
