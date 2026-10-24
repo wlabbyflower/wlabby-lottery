@@ -1,6 +1,6 @@
 # LPK 发布记录
 
-当前包为 **1.0.4**，应用名称 `lottery`，包 ID `abby.lzcapp.lottery`。请阅读 [1.0.4 奖品栏与模板功能验证记录](LPK-1.0.4.md)。
+当前包为 **1.0.5**，应用名称 `lottery`，包 ID `abby.lzcapp.lottery`。请阅读 [1.0.5 界面、公平抽样与结果汇总验证记录](LPK-1.0.5.md)。
 
 WebGL 渲染改造记录见 [1.0.3](LPK-1.0.3.md)。
 

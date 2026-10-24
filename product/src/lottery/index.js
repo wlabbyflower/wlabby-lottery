@@ -1,3 +1,4 @@
+import { PeoplePreview } from "./people-preview.js";
 import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";
 import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
@@ -12,7 +13,6 @@ import {
   setPrizeData,
   resetPrize
 } from "./prizeList";
-import { NUMBER_MATRIX } from "./config.js";
 
 const ROTATE_TIME = 3000;
 const ROTATE_LOOP = 1000;
@@ -46,7 +46,7 @@ let camera,
     sphere: []
   };
 
-let rotateObj, gpu;
+let rotateObj, gpu, preview;
 let frameId = 0, lastFrame = 0, renderDirty = true, dragging = false;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 function scheduleFrame() {
@@ -76,7 +76,7 @@ let selectedCardIndex = [],
   currentLuckys = [];
 
 let prizesCollapsed = false;
-try { prizesCollapsed = localStorage.getItem('lottery.prizesCollapsed') === 'true'; } catch { /* Browser storage may be disabled. */ }
+try { const saved=localStorage.getItem('lottery.prizesCollapsed');prizesCollapsed=saved===null?innerWidth<1050:saved==='true'; } catch { /* Browser storage may be disabled. */ }
 function applyPrizePanelState() {
   const toggle = document.getElementById('prizePanelToggle');
   document.getElementById('prizePanel').classList.toggle('collapsed', prizesCollapsed);
@@ -106,15 +106,16 @@ async function initAll() {
     EACH_COUNT = screenConfig.EACH_COUNT;
     COMPANY = screenConfig.COMPANY;
     document.title = screenConfig.title;
-    document.querySelector('#eventTitle').textContent = screenConfig.title + ({weighted:' · 权重抽奖', designated:' · 定向抽取'}[screenConfig.mode] || '');
+    document.querySelector('#eventTitle').textContent = screenConfig.title;
     setupThemes(screenConfig.theme);
     updateTelemetry(data);
-    HIGHLIGHT_CELL = createHighlight();
+    HIGHLIGHT_CELL = [];
     basicData = { prizes, users: data.users, leftUsers: data.leftUsers, luckyUsers: data.luckyData };
     if (!basicData.users.length) throw new Error('请在活动设置中导入名单');
     setPrizes(prizes);
     TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
     updatePrize();
+    preview = new PeoplePreview(basicData.leftUsers,screenConfig.highlight || screenConfig.title,onPreviewView);
     initCards();
     render();
     shineCard();
@@ -145,6 +146,32 @@ function setupThemes(id) {
   document.addEventListener('keydown', event => { if(event.key === 'Escape' && !menu.classList.contains('none')) { menu.classList.add('none'); toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); } });
   select(id);
 }
+function activityComplete() {
+  return prizes && (prizes.every(prize=>(basicData.luckyUsers[prize.type] || []).length>=prize.count) || !basicData.leftUsers.length);
+}
+function refreshDrawButton() { btns.lottery.textContent=activityComplete()?'查看抽奖结果':'开始抽奖'; }
+function onPreviewView(view) {
+  if(view==='sphere' && scene && targets.sphere.length) { camera.position.set(0,0,3000);camera.up.set(0,1,0);camera.lookAt(new THREE.Vector3());transform(targets.sphere,700); }
+  updateStage();
+}
+function updateStage() {
+  const showCards=preview?.view==='cards' && !isLotting && !currentLuckys.length;
+  document.body.classList.toggle('preview-mode',showCards);
+  document.getElementById('peoplePreview').hidden=isLotting || currentLuckys.length>0;
+  if(showCards) {cancelAnimationFrame(frameId);frameId=0;} else render();
+}
+async function showAllResults() {
+  const snapshot=await api('/getTempData');
+  const body=document.getElementById('allResultsBody');body.replaceChildren();let total=0;
+  for(const prize of snapshot.cfgData.prizes) for(const user of snapshot.luckyData[prize.type] || []) {
+    const row=document.createElement('tr');
+    for(const value of [prize.text,prize.title,user[1],user[0],user[2]]) {const cell=document.createElement('td');cell.textContent=value || '—';row.append(cell);}
+    body.append(row);total++;
+  }
+  document.getElementById('resultsSummary').textContent=`共 ${snapshot.cfgData.prizes.length} 个奖项，${total} 位中奖人员。`;
+  document.getElementById('resultsDialog').showModal();
+}
+document.getElementById('closeResults').onclick=()=>document.getElementById('resultsDialog').close();
 function updatePrize() {
   currentPrizeIndex = prizes.length - 1;
   while (currentPrizeIndex >= 0 && (basicData.luckyUsers[prizes[currentPrizeIndex].type] || []).length >= prizes[currentPrizeIndex].count) currentPrizeIndex--;
@@ -153,6 +180,8 @@ function updatePrize() {
   resetPrize(currentPrizeIndex);
   applyPrizePanelState();
   setPrizeData(currentPrizeIndex, (basicData.luckyUsers[currentPrize.type] || []).length, true);
+  refreshDrawButton();
+  if(activityComplete()) {document.getElementById("prizeType").textContent="活动已结束";document.getElementById("prizeText").textContent="";}
 }
 async function api(url, data = {}) {
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -193,7 +222,7 @@ function initCards() {
   for(let i=0;i<TOTAL_CARDS;i++) {
     const row=Math.floor(i/COLUMN_COUNT),column=i%COLUMN_COUNT;
     const highlighted=HIGHLIGHT_CELL.includes(column+'-'+row);
-    const member=members[i%members.length];
+    const member=members[Math.floor(i*members.length/TOTAL_CARDS)%members.length];
     const object=gpu ? new THREE.Object3D() : new CSS3DObject(createCard(member,highlighted,i,showTable));
     object.position.set(Math.random()*4000-2000,Math.random()*4000-2000,Math.random()*4000-2000);
     scene.add(object); threeDCards.push(object);
@@ -213,6 +242,8 @@ function initCards() {
 
 function setLotteryStatus(status = false) {
   isLotting = status;
+  updateStage();
+  if(!status)refreshDrawButton();
 }
 
 /**
@@ -236,6 +267,7 @@ function bindEvent() {
           if (!confirm('确定清空所有中奖记录？请先导出结果。')) break;
           await api('/reset'); location.reload(); break;
         case 'lottery':
+          if(activityComplete()) {await showAllResults();break;}
           if (!basicData.leftUsers.length) throw new Error('没有剩余可抽奖人员');
           if ((basicData.luckyUsers[currentPrize.type] || []).length >= currentPrize.count) throw new Error('所有奖项已抽完');
           if (lastDrawType !== currentPrize.type && !confirm('开始抽取：' + currentPrize.text + ' ' + currentPrize.title + '？')) break;
@@ -271,14 +303,16 @@ function switchScreen(type) {
     case "enter":
       btns.enter.classList.remove("none");
       btns.lotteryBar.classList.add("none");
-      transform(targets.table, 2000);
+      preview?.setView("cards");
+      transform(targets.table, 1000);
       break;
     default:
       camera.position.set(0, 0, 3000);
       camera.lookAt(new THREE.Vector3());
       btns.enter.classList.add("none");
       btns.lotteryBar.classList.remove("none");
-      transform(targets.sphere, 2000);
+      preview?.setView("sphere");
+      transform(targets.sphere, 1000);
       break;
   }
 }
@@ -409,7 +443,7 @@ function onWindowResize() {
 
 function animate(time) {
   frameId=0;
-  if(document.hidden) return;
+  if(document.hidden || document.body.classList.contains("preview-mode")) return;
   const animating=TWEEN.getAll().length>0;
   const frameBudget=(animating || dragging) && !gpu?.info.software ? 1000/60 : 1000/30;
   if(time-lastFrame<frameBudget-1) { scheduleFrame(); return; }
@@ -559,13 +593,14 @@ function lottery() {
       const result = await api('/draw', { type });
       showResult(result, type);
     } catch (error) { addQipao(error.message); setLotteryStatus(false); }
-    finally { btns.lottery.textContent = '开始抽奖'; }
+    finally { refreshDrawButton(); }
   });
 }
 function showResult(result, type) {
   updateTelemetry(result);
   basicData.leftUsers = result.leftUsers;
   basicData.luckyUsers = result.luckyData;
+  preview?.setUsers(result.leftUsers);
   currentLuckys = result.users;
   lastDrawUsers = result.users;
   lastDrawType = type;
@@ -641,24 +676,6 @@ function shineCard() {
       changeCard(cardIndex, basicData.leftUsers[index]);
     }
   }, 2500);
-}
-
-function createHighlight() {
-  const text = screenConfig.highlight || String(new Date().getFullYear());
-  if (/^\d{4}$/.test(text)) {
-    return text.split('').flatMap((n,i) => NUMBER_MATRIX[n].map(([x,y]) => `${x + 1 + i*4}-${y + 1}`));
-  }
-  ROW_COUNT = 11;
-  COLUMN_COUNT = Math.max(17, Array.from(text).length * 9 + 1);
-  const canvas = document.createElement('canvas');
-  canvas.width = COLUMN_COUNT; canvas.height = ROW_COUNT;
-  const context = canvas.getContext('2d');
-  context.font = 'bold 9px sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
-  context.fillText(text, COLUMN_COUNT/2, ROW_COUNT/2);
-  const pixels = context.getImageData(0, 0, COLUMN_COUNT, ROW_COUNT).data;
-  const cells = [];
-  for(let y = 0; y < ROW_COUNT; y++) for(let x = 0; x < COLUMN_COUNT; x++) if(pixels[(y*COLUMN_COUNT+x)*4+3] > 100) cells.push(`${x}-${y}`);
-  return cells;
 }
 
 const music = document.querySelector('#music'), musicBox = document.querySelector('#musicBox');

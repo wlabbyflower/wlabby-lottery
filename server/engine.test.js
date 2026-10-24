@@ -26,18 +26,19 @@ test('failed redraw leaves results intact',()=>{
  const s=fresh(); s.users=s.users.slice(0,5); draw(s,config,8); const old=structuredClone(s);
  assert.throws(()=>redraw(s,config,8,[s.users[0][0]]),/不足/); assert.deepEqual(s,old);
 });
-test('repeat mode is explicit and still unique within each batch',()=>{
- const s=fresh(),cfg={...config,allowRepeat:true}; draw(s,cfg,42); draw(s,cfg,42);
- assert.equal(available(s,cfg).length,20); assert.equal(new Set(draw(s,cfg,42).map(u=>u[0])).size,10);
+test('legacy repeat or restricted configuration cannot alter the eligible pool',()=>{
+ const s=fresh(),cfg={...config,allowRepeat:true,mode:'weighted',designatedIDs:['0']};
+ const first=draw(s,cfg,42), second=draw(s,cfg,42);
+ assert.equal(new Set([...first,...second].map(u=>u[0])).size,20);
+ assert.equal(available(s,cfg).length,0);
 });
-test('weighted draw excludes zero weights, missing weights default to one',()=>{
- const s=fresh(); s.users=s.users.slice(0,3); s.users[0][4]='0'; s.users[1][4]='100';
- const cfg={...config,mode:'weighted'};
- const result=draw(s,cfg,42); assert.equal(result.length,2); assert.ok(result.every(u=>u[0]!=='0'));
- assert.throws(()=>draw(s,cfg,42),/没有剩余/);
+test('imports reject additional probability or targeting columns',()=>{
+ assert.throws(()=>validateUsers([['1','甲','','',100]]),/四列/);
+ assert.deepEqual(validateUsers([['001','甲','','']])[0],['001','甲','','']);
 });
-test('designated draw only uses configured eligible IDs',()=>{
- const s=fresh(),cfg={...config,mode:'designated',designatedIDs:['2','7']};
- assert.deepEqual(draw(s,cfg,42).map(u=>u[0]).sort(),['2','7']);
- assert.throws(()=>draw(s,cfg,42),/没有剩余/);
+test('every eligible ID is selected exactly once when the entire pool is exhausted',()=>{
+ const s=fresh(),cfg={prizes:[{type:1,count:20}],EACH_COUNT:[1]};
+ const selected=[];for(let i=0;i<20;i++) selected.push(draw(s,cfg,1)[0][0]);
+ assert.deepEqual(selected.slice().sort(),users.map(u=>u[0]).sort());
+ assert.equal(new Set(selected).size,20);
 });

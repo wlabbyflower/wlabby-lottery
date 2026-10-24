@@ -1,12 +1,13 @@
 import './admin.css';
+import './admin-event.css';
 import { THEMES, applyTheme, icon } from './themes.js';
 const $ = id => document.getElementById(id);
 let cfg, state, selectedTheme = 'nebula', dirty = false;
 const panels = {
-  basic: ['基础设置', '定义这场星际之旅的名字，让好运从这里启航。'],
-  appearance: ['UI 主题', '在四种星际风格之间切换，找到属于这场活动的宇宙。'],
-  people: ['名单导入', '每一位同行者，都是这场星际之旅的主角。'],
-  winners: ['中奖名单', '每一次幸运抵达，都在这里留下记录。'],
+  basic: ['基础设置', '设置活动名称、人员名牌和大屏展示内容。'],
+  appearance: ['UI 主题', '选择明亮清晰的配色，预览大屏名牌的显示效果。'],
+  people: ['名单导入', '下载 Excel 模板，导入和检查全部参与人员。'],
+  winners: ['中奖名单', '按奖项查看中奖人员，导出本场活动结果。'],
   prizes: ['奖品设置', '为每一份期待，准备值得揭晓的惊喜。'],
   rules: ['抽奖规则', '设置参与方式，让每一次开奖都清晰有序。'],
 };
@@ -90,8 +91,7 @@ function renderData() {
 async function refreshData() { state = await api('/getTempData'); renderData(); }
 async function load() {
   state = await api('/getTempData'); cfg = state.cfgData;
-  $('mode').value = cfg.mode || 'random'; $('designated').value = (cfg.designatedIDs || []).join('\n');
-  $('title').value = cfg.title; $('previewTitle').textContent = cfg.title; $('company').value = cfg.COMPANY; $('highlight').value = cfg.highlight; $('repeat').checked = cfg.allowRepeat;
+  $('title').value = cfg.title; $('previewTitle').textContent = cfg.title; $('company').value = cfg.COMPANY; $('highlight').value = cfg.highlight;
   chooseTheme(cfg.theme); $('prizes').replaceChildren(); cfg.prizes.forEach((p,i) => prizeRow(p,cfg.EACH_COUNT[i]));
   renderData(); dirty = false;
 }
@@ -108,7 +108,7 @@ on('save', async () => {
     const values = Object.fromEntries(Array.from(tr.querySelectorAll('input'), input=>[input.dataset.key,input.value]));
     prizes.push({ type: Number(tr.dataset.type), text: values.text, title: values.title, count: Number(values.count), img: tr.dataset.img }); counts.push(Number(values.each));
   }
-  await api('/settings', { theme: selectedTheme, mode: $('mode').value, designatedIDs: $('designated').value.split(/[,，\s]+/).filter(Boolean), title: $('title').value, COMPANY: $('company').value, highlight: $('highlight').value, background: $('background').value, allowRepeat: $('repeat').checked, prizes, EACH_COUNT: counts });
+  await api('/settings', { theme: selectedTheme, title: $('title').value, COMPANY: $('company').value, highlight: $('highlight').value, background: $('background').value, prizes, EACH_COUNT: counts });
   await load(); status('设置已保存 · 刷新抽奖大屏即可应用。');
 });
 on('import', async () => {

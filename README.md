@@ -1,6 +1,6 @@
-# wlabby-lottery · 星际抽奖
+# wlabby-lottery · 活动抽奖
 
-面向年会、团队活动和现场抽奖的太空科技风格抽奖应用，可通过浏览器运行，也可打包安装到懒猫微服。
+面向年会、团队活动和现场抽奖的活动抽奖应用，可通过浏览器运行，也可打包安装到懒猫微服。
 
 ## 项目来源与许可证
 
@@ -12,15 +12,14 @@
 
 ## 本版改动
 
-- 默认使用 WebGL2 实例化批量渲染卡片墙及着色器星空；无 WebGL2 时使用 CSS3D 兼容模式。硬件加速取决于浏览器设置与显卡驱动，页面会区分 GPU / 软件渲染。
-- 四套可切换的太空 UI：深空星舰、紫域星云、极光航线、日冕远征，支持即时预览与保存。
-- 左上角齿轮设置入口；左侧分类设置：基础设置、UI 主题、名单导入、中奖名单、奖品设置、抽奖规则。
-- 支持活动标题、公司标识与欢迎墙高亮文字，不再固定年份。
-- 服务端抽奖、默认不重复中奖、按剩余奖品及人数限制本轮数量；结果立即持久保存。
-- 支持未到场人员单独补抽、Excel / 粘贴导入名单、Excel 模板下载、人员搜索、中奖记录筛选和 Excel 导出。
-- 大屏左侧奖品列表支持收起/展开，抽奖过程中也可操作，并记住当前浏览器的选择。
-- 可显式启用重复参与、权重模式或定向模式；权重和定向抽取会在大屏标注。
-- 使用 Vite 构建；增加 Docker 与 LPK v2 打包，适配微服代理和持久化目录。
+- 四套明亮主题：晴空蓝、柔雾紫、清新绿、暖金庆典，支持即时切换。
+- 中间默认显示 12 张大字号人员名牌，支持翻页、自动轮播与暂停；可切换 119 张卡片的 3D 球体，支持鼠标拖动、滚轮缩放及触屏滑动。
+- 球体使用 WebGL2 实例化绘制；无 WebGL2 时回退 CSS3D。静态名牌预览不连续绘制 3D 场景。
+- 左上角齿轮及左侧分类设置；奖品栏可收起，活动标题、公司名称及预览标题可配置。
+- 服务端等概率无放回抽样，整场跨奖项不重复中奖；删除权重、定向与重复中奖选项，接口也拒绝启用。见 [公平性说明](docs/FAIRNESS.md)。
+- 四列 Excel 名单模板下载、Excel / 粘贴导入、未到场人员补抽、结果持久保存与导出。
+- 全部奖项抽完后，底部按钮变为“查看抽奖结果”，汇总所有人员及其奖项、奖品，支持导出 Excel。
+- 支持监听 `0.0.0.0`、Docker 与懒猫微服 LPK v2 打包。
 
 ## 本机启动
 
@@ -48,12 +47,12 @@ npm start
 
 ```bash
 mkdir -p artifacts
-lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
-lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
-lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
+lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
+lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
+lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.5-amd64.lpk
 ```
 
-- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.4`。
+- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.5`。
 - LPK v2 采用 `embed:lottery` 打包应用层；运行不依赖开发电脑。基础镜像层通过已固定的懒猫 Registry 镜像获取。
 - 数据保存在微服 `/lzcapp/var/lottery/`，包括名单、设置和中奖记录；不会把开发电脑现有活动数据打入安装包。
 - 应用通过微服账号鉴权，无额外应用登录。所有获授权用户共享同一场活动，建议由一位主持人操作。

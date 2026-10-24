@@ -22,8 +22,10 @@ function excelUsers(buffer) {
   if (!sheet) throw new Error('Excel 没有工作表');
   return validateUsers(sheet.data.slice(1).filter(r => r.some(v => v != null && String(v).trim())));
 }
-let cfg = read(configFile, { ...defaults, title: '幸运抽奖', highlight: '幸运抽奖', background: '#000a14', theme: 'nebula', allowRepeat: false, mode: 'random', designatedIDs: [] });
+let cfg = read(configFile, { ...defaults, title: '幸运抽奖', highlight: '幸运抽奖', background: '#000a14', theme: 'nebula' });
+delete cfg.mode; delete cfg.allowRepeat; delete cfg.designatedIDs;
 let state = read(stateFile, { users: excelUsers(path.join(__dirname, 'data/users.xlsx')), winners: read(path.join(dataDir, 'temp.json'), {}), absent: read(path.join(dataDir, 'error.json'), []) });
+state.users = state.users.map(user => user.slice(0,4));
 const app = express();
 app.disable('x-powered-by');
 if (process.env.LOTTERY_TRUST_PROXY === '1') app.set('trust proxy', 1);
@@ -85,10 +87,11 @@ app.post('/settings', (req,res) => {
   for (const [type, users] of Object.entries(state.winners)) {
     if (users.length && (!ids.has(Number(type)) || next.prizes.find(p => p.type === Number(type)).count < users.length)) throw new Error('已开奖奖项不可删除或减少至已中奖人数以下，请先重置');
   }
-  if (next.mode && !['random','weighted','designated'].includes(next.mode)) throw new Error('抽奖模式无效');
-  if (next.designatedIDs && (!Array.isArray(next.designatedIDs) || next.designatedIDs.some(id => typeof id !== 'string'))) throw new Error('指定工号格式无效');
+  if (next.mode && next.mode !== 'random') throw new Error('仅支持等概率随机抽奖');
+  if (next.allowRepeat === true) throw new Error('同一场活动不允许重复中奖');
+  if (next.designatedIDs && (!Array.isArray(next.designatedIDs) || next.designatedIDs.length)) throw new Error('不支持指定中奖人员');
   if (next.theme && !themeIDs.includes(next.theme)) throw new Error('主题不存在');
-  const validated = { theme: next.theme || cfg.theme || 'nebula', mode: next.mode || 'random', designatedIDs: [...new Set(next.designatedIDs || [])], prizes: next.prizes.map(p => ({ type: p.type, text: String(p.text).slice(0,80), title: String(p.title || '').slice(0,120), count: p.count, img: /^https?:\/\//i.test(p.img || '') || /^\.?\.?\/img\//.test(p.img || '') ? p.img : '' })), EACH_COUNT: next.EACH_COUNT, COMPANY: String(next.COMPANY || '').slice(0,40), title: String(next.title || '幸运抽奖').slice(0,80), highlight: String(next.highlight || ''), background: next.background, allowRepeat: next.allowRepeat === true };
+  const validated = { theme: next.theme || cfg.theme || 'nebula', prizes: next.prizes.map(p => ({ type: p.type, text: String(p.text).slice(0,80), title: String(p.title || '').slice(0,120), count: p.count, img: /^https?:\/\//i.test(p.img || '') || /^\.?\.?\/img\//.test(p.img || '') ? p.img : '' })), EACH_COUNT: next.EACH_COUNT, COMPANY: String(next.COMPANY || '').slice(0,40), title: String(next.title || '幸运抽奖').slice(0,80), highlight: String(next.highlight || ''), background: next.background };
   atomic(configFile, validated); cfg = validated; res.json(cfg);
 });
 app.post('/importUsers', (req,res) => {
@@ -105,9 +108,9 @@ app.post('/reloadUsers', (req,res) => {
 });
 app.get('/users-template.xlsx', (req,res) => {
   const roster = [
-    ['工号','姓名','部门','照片 URL','权重'],
-    ['001','张三','研发部','',1],
-    ['002','李四','运营部','',1]
+    ['工号','姓名','部门','照片 URL'],
+    ['001','张三','研发部',''],
+    ['002','李四','运营部','']
   ];
   const instructions = [
     ['项目','填写说明'],
@@ -116,11 +119,10 @@ app.get('/users-template.xlsx', (req,res) => {
     ['姓名','必填。'],
     ['部门','可选。'],
     ['照片 URL','可选；填写 http:// 或 https:// 开头的图片地址。不填可留空。'],
-    ['权重','可选，留空默认为 1；仅权重模式使用，范围 0–1000000，0 表示在权重模式下不参与。'],
     ['注意','不要修改第一张表的列顺序。只在第一张表填写参与人员，不要把说明文字追加在人员行后。']
   ];
   res.attachment('users-template.xlsx').send(xlsx.build([
-    { name: '人员名单', data: roster, options: { '!cols': [{wch:16},{wch:16},{wch:20},{wch:48},{wch:12}] } },
+    { name: '人员名单', data: roster, options: { '!cols': [{wch:16},{wch:16},{wch:20},{wch:48}] } },
     { name: '填写说明', data: instructions, options: { '!cols': [{wch:18},{wch:110}] } }
   ]));
 });

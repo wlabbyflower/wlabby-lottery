@@ -14,17 +14,22 @@
     <script src="./lib/tween.min.js"></script>
 
 
-    <div class="cosmos"><div class="orbital-path"></div><div class="planet"></div></div>
-    <header class="screen-header"><div class="header-left"><a class="settings-link icon-button" href="/admin.html" aria-label="活动设置" title="活动设置" data-icon="gear"></a><div class="identity"><div class="eyebrow">ORBITAL / LOTTERY</div><strong>星际抽奖控制台</strong></div></div><h1 id="eventTitle"></h1><div class="header-right"><div class="connection">SYSTEM ONLINE</div><div class="theme-control"><button id="themeToggle" class="icon-button" aria-label="切换 UI 主题" title="切换 UI 主题" aria-expanded="false" data-icon="palette"></button><div id="themeMenu" class="theme-menu none" role="menu" aria-label="UI 主题"></div></div><span id="themeLabel" class="theme-label"></span><div class="music">
+    <header class="screen-header"><div class="header-left"><a class="settings-link icon-button" href="/admin.html" aria-label="活动设置" title="活动设置" data-icon="gear"></a><div class="identity"><div class="eyebrow">LOTTERY</div><strong>活动抽奖</strong></div></div><h1 id="eventTitle"></h1><div class="header-right"><div class="connection">等概率 · 不重复中奖</div><div class="theme-control"><button id="themeToggle" class="icon-button" aria-label="切换 UI 主题" title="切换 UI 主题" aria-expanded="false" data-icon="palette"></button><div id="themeMenu" class="theme-menu none" role="menu" aria-label="UI 主题"></div></div><span id="themeLabel" class="theme-label"></span><div class="music">
       <audio id="music" src="./data/music.mp3" class="music-item" loop></audio>
       <div id="musicBox" class="music-box icon-button" role="button" tabindex="0" aria-label="播放或暂停背景音乐" title="播放/暂停背景音乐">♫</div>
     </div>
 
     </div></header>
     <aside id="prizePanel" class="prize-panel" aria-label="奖品列表"><div class="prize-panel-title"><span>奖品列表</span><button id="prizePanelToggle" type="button" aria-controls="prizeList" aria-expanded="true" aria-label="收起奖品列表" title="收起奖品列表"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span id="prizePanelToggleText">收起</span></button></div><div id="prizeBar"></div></aside>
-    <aside class="telemetry"><div class="telemetry-label">CREW MEMBERS / 参与人员</div><div class="telemetry-value"><span id="crewTotal">—</span><small>人</small></div><div class="telemetry-label">AVAILABLE / 当前奖池</div><div class="telemetry-value"><span id="crewAvailable">—</span><small>人</small></div><div class="telemetry-foot"><span id="renderStatus">正在初始化渲染</span><br>READY FOR THE NEXT SIGNAL</div></aside>
-    <div class="screen-footer"><span>◈</span> ORBITAL STATION<br>YOUR NEXT LUCKY COORDINATE</div>
+    <aside class="telemetry"><div class="telemetry-label">参与人员</div><div class="telemetry-value"><span id="crewTotal">—</span><small>人</small></div><div class="telemetry-label">剩余待抽</div><div class="telemetry-value"><span id="crewAvailable">—</span><small>人</small></div><div class="telemetry-foot"><span id="renderStatus">正在初始化渲染</span><br></div></aside>
+    <div class="screen-footer">等概率抽取 · 整场不重复中奖</div>
 
+    <section id="peoplePreview" class="people-preview" aria-label="参与人员预览">
+      <div class="people-preview-header"><div><span class="preview-kicker">人员预览</span><h2 id="previewHeading">幸运抽奖</h2><p id="previewHint"></p></div><div class="preview-toolbar"><span id="previewTotal"></span><div class="view-switch" role="group" aria-label="预览方式"><button data-preview-view="cards" class="active" aria-pressed="true">清晰名牌</button><button data-preview-view="sphere" aria-pressed="false">3D 球体</button></div></div></div>
+      <div id="previewCards" class="preview-grid" role="list" aria-label="待抽人员名牌"></div>
+      <div class="preview-pager"><span id="previewRange"></span><div><button id="previewPrevious" aria-label="上一页人员">← 上一页</button><button id="previewPause" aria-pressed="false">暂停轮播</button><button id="previewNext" aria-label="下一页人员">下一页 →</button></div></div>
+    </section>
+    <dialog id="resultsDialog" aria-labelledby="resultsHeading"><header><div><span class="preview-kicker">本场活动</span><h2 id="resultsHeading">全部抽奖结果</h2></div><button id="closeResults" class="icon-button" aria-label="关闭抽奖结果">✕</button></header><p id="resultsSummary"></p><div class="results-table-wrap"><table><thead><tr><th>奖项</th><th>奖品</th><th>姓名</th><th>工号</th><th>部门</th></tr></thead><tbody id="allResultsBody"></tbody></table></div><footer><span>结果已自动保存</span><a href="/results.xlsx" class="export-results">导出 Excel</a></footer></dialog>
     <div id="container"></div>
 
     <div id="menu">

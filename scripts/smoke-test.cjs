@@ -1,96 +1,68 @@
-const { chromium }=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const {spawn}=require('node:child_process'),fs=require('node:fs'),os=require('node:os'),assert=require('node:assert/strict');
 const xlsx=require('../server/node_modules/node-xlsx');
 const data=fs.mkdtempSync(os.tmpdir()+'/lottery-check-');
-const server=spawn('/usr/bin/node',['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
+const base='http://127.0.0.1:18888';
+const server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
 (async()=>{let browser;try{
- for(let i=0;i<50;i++){try{await fetch('http://127.0.0.1:18888/health');break}catch{await new Promise(r=>setTimeout(r,100))}}
- const api=async(url,body={})=>{const r=await fetch('http://127.0.0.1:18888'+url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();assert.equal(r.status,200,JSON.stringify(d));return d};
+ for(let i=0;i<60;i++){try{await fetch(base+'/health');break}catch{await new Promise(r=>setTimeout(r,100))}}
+ const api=async(url,body={})=>{const r=await fetch(base+url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();assert.equal(r.status,200,JSON.stringify(d));return d};
  const snapshot=await api('/getTempData');
- await api('/settings',{...snapshot.cfgData,prizes:[{type:42,text:'测试奖',title:'礼物',count:7}],EACH_COUNT:[5]});
- browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.env.LOTTERY_TEST_DISABLE_WEBGL ? ['--disable-webgl'] : ['--enable-unsafe-swiftshader']});
- const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('dialog',d=>d.type()==='prompt'?d.accept('1'):d.accept());
- await page.goto('http://127.0.0.1:18888/admin.html#people');
- await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
- const downloading=page.waitForEvent('download');await page.click('#downloadTemplate');const download=await downloading;
- assert.equal(download.suggestedFilename(),'users-template.xlsx');
- const templatePath=data+'/users-template.xlsx';await download.saveAs(templatePath);
- const sheets=xlsx.parse(templatePath);assert.deepEqual(sheets[0].data[0],['工号','姓名','部门','照片 URL','权重']);
- assert.equal(sheets[0].data[1][0],'001');assert.equal(sheets[1].name,'填写说明');
- await page.setInputFiles('#file',templatePath);await page.click('#import');
- await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('已导入 2 人'));
- assert.equal(await page.locator('#peopleList tr').count(),2);
+ const cfg={...snapshot.cfgData,prizes:[{type:1,text:'一等奖',title:'礼物一',count:2},{type:2,text:'二等奖',title:'礼物二',count:3}],EACH_COUNT:[2,3]};
+ await api('/settings',cfg);
+ for(const bad of [{mode:'weighted'},{mode:'designated',designatedIDs:['001']},{allowRepeat:true},{designatedIDs:['001']}]) {
+  const r=await fetch(base+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cfg,...bad})});assert.equal(r.status,400);
+ }
+ browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.env.LOTTERY_TEST_DISABLE_WEBGL?['--disable-webgl']:['--enable-unsafe-swiftshader']});
+ const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('dialog',d=>d.type()==='prompt'?d.accept('1'):d.accept());
+ await page.goto(base+'/admin.html#people');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ const downloading=page.waitForEvent('download');await page.click('#downloadTemplate');const download=await downloading;const templatePath=data+'/template.xlsx';await download.saveAs(templatePath);
+ const sheets=xlsx.parse(templatePath);assert.deepEqual(sheets[0].data[0],['工号','姓名','部门','照片 URL']);assert.equal(sheets[0].data[1][0],'001');assert.equal(sheets[1].name,'填写说明');
+ await page.setInputFiles('#file',templatePath);await page.click('#import');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('已导入 2 人'));
  assert.deepEqual((await api('/getTempData')).users.map(u=>u[0]),['001','002']);
+ const invalid=await fetch(base+'/importUsers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:[['1','甲','','',100]]})});assert.equal(invalid.status,400);
  await api('/importUsers',{users:snapshot.users});
- await page.goto('http://127.0.0.1:18888');await page.waitForTimeout(4200);
- assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'true');
+ await page.goto(base);await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
+ assert.equal(await page.locator('.person-preview-card').count(),12);
+ assert.ok(await page.locator('.person-name').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>=30);
+ const first=await page.locator('.person-id').allTextContents();await page.click('#previewNext');assert.notDeepEqual(await page.locator('.person-id').allTextContents(),first);
+ await page.click('#previewPrevious');assert.deepEqual(await page.locator('.person-id').allTextContents(),first);
+ await page.click('#previewPause');assert.equal(await page.getAttribute('#previewPause','aria-pressed'),'true');
+ await page.screenshot({path:'/tmp/lottery-bright-preview.png'});
  await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),false);
- assert.equal(await page.locator('.prize-mess').isVisible(),true);
- await page.reload();await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
- assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'false');
+ await page.reload();await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'false');
  await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),true);
- await page.waitForTimeout(4200);
- const mode=await page.evaluate(()=>window.lotteryRenderInfo());
- if(process.env.LOTTERY_TEST_DISABLE_WEBGL) {
-   assert.equal(mode.mode,'css3d'); assert.equal(await page.locator('.element').count(),407);
- } else {
-   assert.equal(mode.mode,'webgl2'); assert.equal(mode.powerPreference,'high-performance');assert.equal(mode.cardCount,407);assert.equal(mode.drawCalls,2);
-   assert.equal(await page.locator('.element').count(),0);
-   const atlas=mode.atlasVersion;await page.waitForTimeout(250);assert.equal((await page.evaluate(()=>lotteryRenderInfo())).atlasVersion,atlas);
-   await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});
-   const paused=await page.evaluate(()=>lotteryRenderInfo().frame);await page.waitForTimeout(250);assert.equal(await page.evaluate(()=>lotteryRenderInfo().frame),paused);
-   await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))});
-   await page.waitForFunction(frame=>lotteryRenderInfo().frame>frame,paused);
-   await page.evaluate(()=>{window.testLoseContext=document.querySelector('.gpu-scene').getContext('webgl2').getExtension('WEBGL_lose_context');window.testLoseContext.loseContext()});
-   await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='context-lost');
-   await page.evaluate(()=>window.testLoseContext.restoreContext());
-   await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='ready');
+ await page.click('[data-preview-view="sphere"]');await page.waitForTimeout(2000);
+ const mode=await page.evaluate(()=>lotteryRenderInfo());assert.equal(mode.cardCount,119);assert.equal(mode.mode,process.env.LOTTERY_TEST_DISABLE_WEBGL?'css3d':'webgl2');
+ if(mode.mode==='webgl2') {
+  assert.equal(mode.drawCalls,1);assert.equal(mode.powerPreference,'high-performance');
+  const old=mode.camera;await page.mouse.move(850,500);await page.mouse.down();await page.mouse.move(1080,590,{steps:10});await page.mouse.up();await page.waitForTimeout(250);
+  const rotated=await page.evaluate(()=>lotteryRenderInfo().camera);assert.notDeepEqual(rotated,old);
+  await page.mouse.wheel(0,600);await page.waitForTimeout(400);const zoomed=await page.evaluate(()=>lotteryRenderInfo().camera);assert.ok(Math.abs(Math.hypot(...zoomed)-Math.hypot(...rotated))>10);
+  await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))});
+  const frame=await page.evaluate(()=>lotteryRenderInfo().frame);await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>lotteryRenderInfo().frame),frame);
+  await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))});
+  await page.evaluate(()=>{window.testLoseContext=document.querySelector('.gpu-scene').getContext('webgl2').getExtension('WEBGL_lose_context');window.testLoseContext.loseContext()});await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='context-lost');
+  await page.evaluate(()=>window.testLoseContext.restoreContext());await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='ready');
  }
- await page.click('#enter');await page.waitForTimeout(4200);
- await page.click('#lottery',{force:true});await page.waitForTimeout(700);
- await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),false);
- await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),true);
- await page.click('#prizePanelToggle');
- await page.click('#lottery',{force:true});await page.waitForTimeout(2000);
- assert.equal(await page.locator('#prizeList').isVisible(),false);assert.equal(await page.locator('.prize-mess').isVisible(),true);
- assert.equal(await page.locator('.prize').count(),5);const before=await api('/getTempData');assert.equal(before.luckyData[42].length,5);
- await page.screenshot({path:'/tmp/lottery-draw.png'});
- await page.click('#reLottery');await page.waitForTimeout(2600);const after=await api('/getTempData');assert.equal(after.luckyData[42].length,5);assert.equal(new Set(after.luckyData[42].map(u=>u[0])).size,5);
- assert.equal(after.luckyData[42].filter(u=>before.luckyData[42].some(v=>v[0]===u[0])).length,4);
- await page.click('#lottery',{force:true});await page.waitForTimeout(1700);await page.click('#lottery',{force:true});await page.waitForTimeout(2000);assert.equal(await page.locator('.prize').count(),2);
- await page.reload();await page.waitForTimeout(1500);assert.equal((await api('/getTempData')).luckyData[42].length,7);
- assert.equal(JSON.parse(fs.readFileSync(data+'/state.json')).winners[42].length,7);
- const result=await fetch('http://127.0.0.1:18888/results.xlsx');assert.equal(result.status,200);assert.ok((await result.arrayBuffer()).byteLength>1000);
- await page.goto('http://127.0.0.1:18888/admin.html#appearance'); await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
- assert.equal(await page.locator('.theme-choice').count(),4);
- for (const id of ['violet','aurora','solar','nebula']) {
-   await page.click(`[data-id="${id}"]`); assert.equal(await page.locator('html').getAttribute('data-theme'),id);
- }
- await page.click('[data-id="violet"]');
- await page.click('[data-panel="basic"]'); await page.fill('#title','星际盛典');
- await page.click('[data-panel="prizes"]'); assert.equal(await page.locator('#prizes tr').count(),1);
- await page.click('[data-panel="basic"]'); assert.equal(await page.inputValue('#title'),'星际盛典');
- await page.click('#save'); await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
- assert.equal((await api('/getTempData')).cfgData.theme,'violet');
- for(const section of ['people','winners','rules','appearance']) { await page.click(`[data-panel="${section}"]`); assert.equal(await page.locator('.settings-panel.active').getAttribute('id'),'panel-'+section); }
- await page.click('[data-panel="people"]'); await page.fill('#peopleSearch','OSAKA'); assert.equal(await page.locator('#peopleList tr').count(),1);
- await page.goto('http://127.0.0.1:18888');await page.waitForFunction(()=>document.documentElement.dataset.theme==='violet');
- for(const id of ['aurora','solar','nebula']) {
-   await page.click('#themeToggle'); await page.click(`#themeMenu [data-theme="${id}"]`);
-   await page.waitForFunction(id=>document.documentElement.dataset.theme===id,id);
-   assert.equal((await api('/getTempData')).cfgData.theme,id);
- }
- await page.reload();await page.waitForFunction(()=>document.documentElement.dataset.theme==='nebula');
- const invalid=await fetch('http://127.0.0.1:18888/theme',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:'invalid'})});assert.equal(invalid.status,400);
- assert.equal((await api('/getTempData')).cfgData.theme,'nebula');
- await page.goto('http://127.0.0.1:18888/admin.html#appearance'); await page.setViewportSize({width:390,height:844});await page.waitForTimeout(350);
- assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
- if(!process.env.LOTTERY_TEST_DISABLE_WEBGL) {
-   const saved=await api('/getTempData');await api('/settings',{...saved.cfgData,highlight:'星际抽奖幸运之旅'});
-   await page.goto('http://127.0.0.1:18888');await page.waitForTimeout(4300);
-   assert.equal((await page.evaluate(()=>lotteryRenderInfo())).cardCount,803);
-   assert.equal(await page.locator('.element').count(),0);
-   assert.equal(await page.evaluate(()=>{const gl=document.querySelector('.gpu-scene').getContext('webgl2');return gl.getError()}),0);
- }
- assert.deepEqual(errors,[]);console.log('PASS: '+mode.mode+' rendering, prize collapse during draw and after reload, Excel template download and import, draw, partial redraw, persistence, export, themes, sidebar, search and mobile layout'+(mode.mode==='webgl2'?', 2 draw calls, no background card DOM, stable atlas, visibility pause, context restoration, 803-card wall':''));
- }finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1});
+ await page.screenshot({path:'/tmp/lottery-bright-sphere.png'});
+ await page.click('#enter');await page.waitForTimeout(2200);
+ const draw=async()=>{await page.click('#lottery');await page.waitForTimeout(1400);await page.click('#lottery');await page.waitForTimeout(1900)};
+ await draw();assert.equal(await page.locator('.prize').count(),3);
+ const before=await api('/getTempData');assert.equal(before.luckyData[2].length,3);
+ await page.click('#reLottery');await page.waitForTimeout(2300);const after=await api('/getTempData');assert.equal(after.luckyData[2].length,3);assert.equal(after.luckyData[2].filter(u=>before.luckyData[2].some(v=>u[0]===v[0])).length,2);
+ await draw();assert.equal(await page.locator('.prize').count(),2);
+ const results=await api('/getTempData');assert.equal(new Set(Object.values(results.luckyData).flat().map(u=>u[0])).size,5);
+ assert.equal(await page.textContent('#lottery'),'查看抽奖结果');await page.click('#lottery');await page.locator('#resultsDialog').waitFor({state:'visible'});assert.equal(await page.locator('#resultsDialog').isVisible(),true);assert.equal(await page.locator('#allResultsBody tr').count(),5);
+ assert.ok((await page.locator('#allResultsBody').textContent()).includes('一等奖'));assert.ok((await page.locator('#allResultsBody').textContent()).includes('二等奖'));
+ await page.screenshot({path:'/tmp/lottery-final-results.png'});await page.click('#closeResults');await page.reload();await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
+ assert.equal(await page.textContent('#lottery'),'查看抽奖结果');await page.click('#lottery');await page.locator('#resultsDialog').waitFor({state:'visible'});assert.equal(await page.locator('#allResultsBody tr').count(),5);
+ const result=await fetch(base+'/results.xlsx');const exported=xlsx.parse(Buffer.from(await result.arrayBuffer()))[0].data;assert.equal(exported.length,6);assert.equal(exported[0].includes('权重'),false);
+ await page.goto(base+'/admin.html#rules');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));assert.equal(await page.locator('#mode,#designated,#repeat').count(),0);
+ await page.click('[data-panel="appearance"]');assert.equal(await page.locator('.theme-choice').count(),4);
+ for(const id of ['violet','aurora','solar','nebula']){await page.click(`[data-id="${id}"]`);assert.equal(await page.locator('html').getAttribute('data-theme'),id);}
+ await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));await page.screenshot({path:'/tmp/lottery-bright-settings.png'});
+ await page.goto(base);await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/lottery-bright-mobile.png'});
+ assert.deepEqual(errors,[]);console.log('PASS: readable 12-person preview, paging, four-column Excel round trip, unfair API rejection, '+mode.mode+' rendering, sphere drag/zoom, draw, cross-prize exclusion, redraw, final results and reload, export, themes and mobile layout');
+}finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true})}})().catch(e=>{console.error(e);process.exitCode=1});

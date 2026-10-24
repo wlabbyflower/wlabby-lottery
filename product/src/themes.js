@@ -1,16 +1,15 @@
 export const THEMES = [
-  { id: 'nebula', name: '深空星舰', subtitle: 'DEEP SPACE', description: '冰蓝星光 · 舰桥仪表 · 深空轨道', accent: '#70d9ff', accent2: '#387bff', background: '#050a18', rgb: '112, 217, 255' },
-  { id: 'violet', name: '紫域星云', subtitle: 'NEBULA VOYAGE', description: '紫色星云 · 瑰丽光晕 · 星际漫游', accent: '#c4a0ff', accent2: '#f07acb', background: '#0c071a', rgb: '196, 160, 255' },
-  { id: 'aurora', name: '极光航线', subtitle: 'AURORA SIGNAL', description: '翡翠极光 · 清透能量 · 远航信号', accent: '#72f4ca', accent2: '#25a6c6', background: '#041410', rgb: '114, 244, 202' },
-  { id: 'solar', name: '日冕远征', subtitle: 'SOLAR EXPEDITION', description: '琥珀日冕 · 温暖星尘 · 星际远征', accent: '#ffd293', accent2: '#ec7b49', background: '#160d09', rgb: '255, 210, 147' },
+  { id: 'nebula', name: '晴空蓝', subtitle: 'CLEAR BLUE', description: '明亮蓝白 · 清晰名牌', accent: '#2563eb', accent2: '#60a5fa', background: '#edf3ff', ink: '#162743', rgb: '37, 99, 235' },
+  { id: 'violet', name: '柔雾紫', subtitle: 'SOFT VIOLET', description: '柔和浅紫 · 简洁优雅', accent: '#7c3aed', accent2: '#a78bfa', background: '#f4f0fc', ink: '#302041', rgb: '124, 58, 237' },
+  { id: 'aurora', name: '清新绿', subtitle: 'FRESH GREEN', description: '清爽绿白 · 舒适易读', accent: '#047857', accent2: '#34d399', background: '#edf7f2', ink: '#17382c', rgb: '4, 120, 87' },
+  { id: 'solar', name: '暖金庆典', subtitle: 'WARM GOLD', description: '温暖米金 · 适合庆典', accent: '#ad5a10', accent2: '#fbbf24', background: '#fff6e8', ink: '#432b18', rgb: '173, 90, 16' },
 ];
 export function applyTheme(id = 'nebula') {
   const theme = THEMES.find(t => t.id === id) || THEMES[0];
   document.documentElement.dataset.theme = theme.id;
-  for (const [key, value] of Object.entries({ '--accent': theme.accent, '--accent-2': theme.accent2, '--accent-rgb': theme.rgb, '--space': theme.background })) document.documentElement.style.setProperty(key, value);
-  window.lotteryBackground = theme.background;
-  window.lotteryStarColor = theme.rgb;
-  window.dispatchEvent(new CustomEvent("lottery-theme-change", {detail:theme}));
+  document.documentElement.style.colorScheme='light';
+  for (const [key, value] of Object.entries({ '--accent': theme.accent, '--accent-2': theme.accent2, '--accent-rgb': theme.rgb, '--space': theme.background, '--ink':theme.ink, '--surface':'#ffffff' })) document.documentElement.style.setProperty(key, value);
+  window.dispatchEvent(new CustomEvent('lottery-theme-change', {detail:theme}));
   return theme;
 }
 export const icons = {
