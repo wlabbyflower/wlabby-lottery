@@ -22,6 +22,11 @@ function excelUsers(buffer) {
   if (!sheet) throw new Error('Excel 没有工作表');
   return validateUsers(sheet.data.slice(1).filter(r => r.some(v => v != null && String(v).trim())));
 }
+const clearJournal = path.join(dataDir, 'pending-clear.json');
+if (fs.existsSync(clearJournal)) {
+  const pending = read(clearJournal);
+  atomic(stateFile, pending.state); atomic(configFile, pending.cfg); fs.unlinkSync(clearJournal);
+}
 let cfg = read(configFile, { ...defaults, title: '幸运抽奖', highlight: '幸运抽奖', background: '#000a14', theme: 'nebula' });
 delete cfg.mode; delete cfg.allowRepeat; delete cfg.designatedIDs;
 let state = read(stateFile, { users: excelUsers(path.join(__dirname, 'data/users.xlsx')), winners: read(path.join(dataDir, 'temp.json'), {}), absent: read(path.join(dataDir, 'error.json'), []) });
@@ -66,6 +71,23 @@ app.post('/reset', (req,res) => {
   transaction(s => { s.winners = {}; s.absent = []; });
   res.json({ type: 'success' });
 });
+app.get('/backup.json', (req,res) => res.attachment('lottery-backup.json').json({ version: 1, exportedAt: new Date().toISOString(), cfg, state }));
+app.get('/users.xlsx', (req,res) => res.attachment('users.xlsx').send(xlsx.build([{name:'人员名单',data:[['工号','姓名','部门','照片 URL'],...state.users]}])));
+app.post('/clearData', (req,res) => {
+  const { scope, confirm } = req.body;
+  if (!['people','winners','prizes','all'].includes(scope) || confirm !== scope) throw new Error('请确认要清空的数据范围');
+  const hasWinners = Object.values(state.winners).some(users => users.length);
+  if (hasWinners && ['people','prizes'].includes(scope)) throw new Error('请先导出并清空中奖记录，再清空名单或奖品；也可使用清空整场活动');
+  const nextState = structuredClone(state), nextCfg = structuredClone(cfg);
+  if (['people','all'].includes(scope)) { nextState.users = []; nextState.absent = []; }
+  if (['winners','all'].includes(scope)) { nextState.winners = {}; nextState.absent = []; }
+  if (['prizes','all'].includes(scope)) { nextCfg.prizes = []; nextCfg.EACH_COUNT = []; }
+  // Recover both files on next startup if interrupted between the two writes.
+  atomic(clearJournal, { state: nextState, cfg: nextCfg });
+  atomic(stateFile, nextState); atomic(configFile, nextCfg);
+  state = nextState; cfg = nextCfg; fs.unlinkSync(clearJournal);
+  res.json(snapshot());
+});
 const themeIDs = ['nebula', 'violet', 'aurora', 'solar'];
 app.post('/theme', (req,res) => {
   if (!themeIDs.includes(req.body.theme)) return res.status(400).json({ error: '主题不存在' });
@@ -75,7 +97,7 @@ app.post('/theme', (req,res) => {
 app.post('/settings', (req,res) => {
   if (!req.body.prizes) return res.json(cfg);
   const next = req.body;
-  if (!Array.isArray(next.prizes) || !next.prizes.length || next.prizes.length > 100) throw new Error('请配置 1–100 个奖项');
+  if (!Array.isArray(next.prizes) || next.prizes.length > 100) throw new Error('最多配置 100 个奖项');
   const ids = new Set();
   next.prizes.forEach(p => {
     if (!Number.isInteger(p.type) || ids.has(p.type) || !String(p.text || '').trim() || !Number.isInteger(p.count) || p.count < 1 || p.count > 100000) throw new Error('奖项需要唯一数字 type、名称和有效数量');

@@ -9,6 +9,7 @@ const panels = {
   people: ['名单导入', '下载 Excel 模板，导入和检查全部参与人员。'],
   winners: ['中奖名单', '按奖项查看中奖人员，导出本场活动结果。'],
   prizes: ['奖品设置', '为每一份期待，准备值得揭晓的惊喜。'],
+  data: ['数据管理', '备份往期结果，清空旧数据，准备下一场活动。'],
   rules: ['抽奖规则', '设置参与方式，让每一次开奖都清晰有序。'],
 };
 const status = (message, error = false) => { $('status').textContent = message; $('status').classList.toggle('error', error); };
@@ -119,6 +120,24 @@ on('import', async () => {
 });
 on('paste', async () => { const users = $('rows').value.trim().split(/\r?\n/).map(row=>row.split('\t')); const result = await api('/importUsers',{users}); await refreshData(); status(`已导入 ${result.count} 人 · 请刷新抽奖大屏。`); });
 on('reload', async () => { await api('/reloadUsers'); await refreshData(); status('已重新读取服务器 Excel · 请刷新抽奖大屏。'); });
-on('reset', async () => { if(!confirm('确定清空所有中奖记录？请先下载结果。')) return; await api('/reset'); await refreshData(); status('中奖结果已重置，人员名单、奖项和主题已保留。'); });
+let clearScope;
+const clearDescriptions = {
+  people: ['清空人员名单', '删除所有参与人员和未到场记录，保留奖品、主题。已有中奖记录时请先导出并清空中奖记录。'],
+  winners: ['清空中奖记录', '删除全部中奖及未到场记录，保留人员、奖品和主题；所有人员可重新参与下一场抽奖。'],
+  prizes: ['清空奖品设置', '删除所有奖项和每轮人数配置，保留人员和主题。已有中奖记录时请先导出并清空中奖记录。'],
+  all: ['清空整场活动', '删除全部人员、奖品、中奖和未到场记录，保留活动标题与主题。清空后不会恢复默认示例。'],
+};
+for (const [id,scope] of Object.entries({clearPeople:'people',reset:'winners',clearPrizes:'prizes',clearAll:'all'})) on(id,()=>{
+  clearScope=scope;
+  $('clearTitle').textContent=clearDescriptions[scope][0];
+  $('clearDescription').textContent=clearDescriptions[scope][1]+(dirty?' 当前未保存的设置修改也将丢弃。':'');
+  $('clearDialog').showModal();$('cancelClear').focus();
+});
+$('cancelClear').onclick=()=>$('clearDialog').close();
+on('confirmClear',async()=>{
+  await api('/clearData',{scope:clearScope,confirm:clearScope});
+  await load();$('file').value='';$('rows').value='';$('peopleSearch').value='';$('fileLabel').textContent='支持 .xlsx、.xls，文件不超过 8MB';renderData();
+  $('clearDialog').close();status(clearDescriptions[clearScope][0]+'已完成并保存 · 请刷新大屏。');
+});
 on('refreshResults', async () => { await refreshData(); status('中奖名单已更新。'); });
 load().then(()=>status('控制台已连接 · 所有中奖结果自动保存，设置修改请点击右上角保存。')).catch(error=>status(error.message,true));

@@ -3,7 +3,7 @@ const {spawn}=require('node:child_process'),fs=require('node:fs'),os=require('no
 const xlsx=require('../server/node_modules/node-xlsx');
 const data=fs.mkdtempSync(os.tmpdir()+'/lottery-check-');
 const base='http://127.0.0.1:18888';
-const server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
+let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
 (async()=>{let browser;try{
  for(let i=0;i<60;i++){try{await fetch(base+'/health');break}catch{await new Promise(r=>setTimeout(r,100))}}
  const api=async(url,body={})=>{const r=await fetch(base+url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();assert.equal(r.status,200,JSON.stringify(d));return d};
@@ -67,5 +67,27 @@ const server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path'
  await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));await page.screenshot({path:'/tmp/lottery-bright-settings.png'});
  for(const selector of ['.back-screen','.header-actions [data-return-screen]']) {await page.goto(base+'/admin.html');await page.setViewportSize({width:1366,height:600});await page.locator(selector).click();await page.waitForURL(base+'/');assert.equal(browser.contexts()[0].pages().length,1);}
  await page.goto(base);await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/lottery-bright-mobile.png'});
+
+ // Clear controls use isolated test data only; never touch the live event.
+ await page.goto(base+'/admin.html#data');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ const archived=await (await fetch(base+'/backup.json')).json();assert.equal(Object.values(archived.state.winners).flat().length,5);assert.equal(archived.state.users.length,132);
+ const roster=xlsx.parse(Buffer.from(await (await fetch(base+'/users.xlsx')).arrayBuffer()))[0].data;assert.equal(roster.length,133);
+ const noConfirm=await fetch(base+'/clearData',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope:'all'})});assert.equal(noConfirm.status,400);
+ for(const scope of ['people','prizes']) {const r=await fetch(base+'/clearData',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scope,confirm:scope})});assert.equal(r.status,400);}
+ await page.click('#clearAll');await page.click('#cancelClear');assert.equal(Object.values((await api('/getTempData')).luckyData).flat().length,5);
+ const clear=async(panel,button)=>{await page.click(`[data-panel="${panel}"]`);await page.click(button);await page.click('#confirmClear');await page.locator('#clearDialog').waitFor({state:'hidden'});};
+ await clear('winners','#reset');let cleared=await api('/getTempData');assert.equal(Object.values(cleared.luckyData).flat().length,0);assert.equal(cleared.users.length,132);assert.equal(cleared.cfgData.prizes.length,2);
+ await clear('people','#clearPeople');cleared=await api('/getTempData');assert.equal(cleared.users.length,0);assert.equal(cleared.cfgData.prizes.length,2);
+ await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');assert.ok(await page.locator('#enter').isDisabled());assert.equal(await page.locator('.preview-empty').count(),1);
+ await page.goto(base+'/admin.html#prizes');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));await clear('prizes','#clearPrizes');cleared=await api('/getTempData');assert.equal(cleared.cfgData.prizes.length,0);
+ await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ await api('/importUsers',{users:snapshot.users});await api('/settings',cfg);await api('/draw',{type:2});
+ await page.goto(base+'/admin.html#data');await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));await clear('data','#clearAll');
+ const saved=await api('/getTempData');assert.equal(saved.users.length,0);assert.deepEqual(saved.luckyData,{});assert.deepEqual(saved.cfgData.prizes,[]);assert.equal(saved.cfgData.title,cfg.title);assert.equal(saved.cfgData.theme,cfg.theme);
+ const stopped=new Promise(resolve=>server.once('exit',resolve));server.kill();await stopped;
+ server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
+ for(let i=0;i<60;i++){try{await fetch(base+'/health');break}catch{await new Promise(r=>setTimeout(r,100))}}
+ assert.deepEqual(await api('/getTempData'),saved);await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');
+ console.log('PASS: backups, clear cancellation and scope confirmation, linked-result protection, independent clears, full clear, empty screen and restart persistence');
  assert.deepEqual(errors,[]);console.log('PASS: compact 24-person portrait preview, paging, four-column Excel round trip, unfair API rejection, '+mode.mode+' rendering, sphere drag/zoom, draw, cross-prize exclusion, redraw, final results and reload, export, themes and mobile layout');
 }finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true})}})().catch(e=>{console.error(e);process.exitCode=1});

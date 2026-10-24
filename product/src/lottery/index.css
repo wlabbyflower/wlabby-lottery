@@ -12,3 +12,5 @@
 @media(min-width:1800px){.preview-grid{grid-template-columns:repeat(8,minmax(0,1fr));max-width:1120px;width:100%;align-self:center}.person-preview-card{padding:14px 8px;min-height:0}.person-name{font-size:24px}.person-avatar{width:34px;height:34px}}
 @media(max-width:700px){.preview-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;flex-shrink:1}.person-preview-card{padding:9px 3px;min-height:110px;gap:6px}.person-name{font-size:18px}.person-name.long-name{font-size:14px}.person-avatar{width:23px;height:23px;font-size:13px}.person-id{font-size:7px}.person-department{font-size:9px}.people-preview-header h2{font-size:22px}}
 @media(prefers-reduced-motion:reduce){.person-preview-card{animation:none}}
+
+.preview-empty{grid-column:1/-1;padding:32px;text-align:center;color:#647991;background:#fff;border-radius:12px}

@@ -2,3 +2,5 @@
 
 .sidebar{overflow-y:auto;overscroll-behavior:contain}.sidebar nav,.brand,.nav-caption{flex-shrink:0}.sidebar-bottom{position:sticky;bottom:-34px;flex-shrink:0;background:var(--surface);padding:16px 12px 20px;z-index:1}.back-screen{min-height:44px;padding:12px 0;position:relative;pointer-events:auto}.back-screen span{pointer-events:none}
 @media(max-height:700px) and (min-width:651px){.sidebar{padding-top:18px;padding-bottom:12px}.brand{padding-bottom:18px}.sidebar-bottom{bottom:-12px}.station-status{display:none}.nav-item{padding-top:10px;padding-bottom:10px}}
+
+dialog{max-width:620px;width:calc(100% - 36px);padding:28px;border:1px solid #263f6026;border-radius:16px;color:var(--ink);background:var(--surface);box-shadow:0 20px 80px #16274333}dialog::backdrop{background:#16274366}dialog p{line-height:1.8}dialog .button-row{flex-wrap:wrap}

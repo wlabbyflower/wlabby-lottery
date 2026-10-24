@@ -50,7 +50,7 @@ let rotateObj, gpu, preview;
 let frameId = 0, lastFrame = 0, renderDirty = true, dragging = false;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 function scheduleFrame() {
-  if (!document.hidden && !frameId) frameId = requestAnimationFrame(animate);
+  if (renderer && controls && !document.hidden && !frameId) frameId = requestAnimationFrame(animate);
 }
 window.addEventListener('lottery-theme-change', () => render());
 document.addEventListener('visibilitychange', () => {
@@ -111,9 +111,17 @@ async function initAll() {
     updateTelemetry(data);
     HIGHLIGHT_CELL = [];
     basicData = { prizes, users: data.users, leftUsers: data.leftUsers, luckyUsers: data.luckyData };
-    if (!basicData.users.length) throw new Error('请在活动设置中导入名单');
-    setPrizes(prizes);
+
     TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
+    if (!basicData.users.length || !prizes.length) {
+      preview = new PeoplePreview(basicData.users,screenConfig.highlight || screenConfig.title,onPreviewView);
+      document.querySelector('[data-preview-view="sphere"]').disabled=true;
+      document.getElementById('enter').disabled=true;
+      document.getElementById('enter').textContent=!basicData.users.length?'请先导入人员名单':'请先配置奖品';
+      document.getElementById('prizeBar').textContent=prizes.length?'奖项已保留，请先导入人员':'暂无奖品，请在设置中添加';
+      window.lotteryRenderInfo=()=>({mode:'empty',cardCount:0});return;
+    }
+    setPrizes(prizes);
     updatePrize();
     preview = new PeoplePreview(basicData.leftUsers,screenConfig.highlight || screenConfig.title,onPreviewView);
     initCards();
@@ -158,7 +166,7 @@ function updateStage() {
   const showCards=preview?.view==='cards' && !isLotting && !currentLuckys.length;
   document.body.classList.toggle('preview-mode',showCards);
   document.getElementById('peoplePreview').hidden=isLotting || currentLuckys.length>0;
-  if(showCards) {cancelAnimationFrame(frameId);frameId=0;} else render();
+  if(showCards) {cancelAnimationFrame(frameId);frameId=0;} else if(scene) render();
 }
 async function showAllResults() {
   const snapshot=await api('/getTempData');

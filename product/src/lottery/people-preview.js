@@ -26,6 +26,7 @@ export class PeoplePreview {
   }
   render() {
     const cards=document.getElementById('previewCards');cards.replaceChildren();
+    if(!this.users.length) {const empty=document.createElement('p');empty.className='preview-empty';empty.textContent='暂无待抽人员，请通过左上角设置导入名单。';cards.append(empty);}
     let index=0;
     for(const user of this.users.slice(this.page*this.size,(this.page+1)*this.size)) {
       const card=document.createElement('article');card.className='person-preview-card';card.style.setProperty('--card-delay',`${index++*12}ms`);card.setAttribute('role','listitem');
