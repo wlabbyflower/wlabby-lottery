@@ -7,3 +7,12 @@
 #container>.winner-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .winner-overlay .element{position:absolute;top:0;left:0;transform-origin:center;will-change:transform}
 [data-renderer="css3d"] #container .element{contain:layout paint style}
+
+.prize-panel{pointer-events:none}
+.prize-panel-title,.prize-panel .prize-list{pointer-events:auto}
+#prizePanelToggle{display:inline-flex;align-items:center;gap:4px;background:rgba(var(--accent-rgb),.06);border:1px solid rgba(var(--accent-rgb),.2);border-radius:8px;color:var(--accent);font:11px system-ui;padding:6px 9px;white-space:nowrap}
+#prizePanelToggle:hover{background:rgba(var(--accent-rgb),.15)}
+#prizePanelToggle svg{width:14px;height:14px}
+.prize-panel.collapsed{width:max-content;bottom:auto}
+.prize-panel.collapsed .prize-panel-title>span,.prize-panel.collapsed .prize-list{display:none}
+.prize-panel.collapsed #prizePanelToggle svg{transform:rotate(180deg)}

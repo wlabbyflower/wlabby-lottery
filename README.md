@@ -17,7 +17,8 @@
 - 左上角齿轮设置入口；左侧分类设置：基础设置、UI 主题、名单导入、中奖名单、奖品设置、抽奖规则。
 - 支持活动标题、公司标识与欢迎墙高亮文字，不再固定年份。
 - 服务端抽奖、默认不重复中奖、按剩余奖品及人数限制本轮数量；结果立即持久保存。
-- 支持未到场人员单独补抽、Excel / 粘贴导入名单、人员搜索、中奖记录筛选和 Excel 导出。
+- 支持未到场人员单独补抽、Excel / 粘贴导入名单、Excel 模板下载、人员搜索、中奖记录筛选和 Excel 导出。
+- 大屏左侧奖品列表支持收起/展开，抽奖过程中也可操作，并记住当前浏览器的选择。
 - 可显式启用重复参与、权重模式或定向模式；权重和定向抽取会在大屏标注。
 - 使用 Vite 构建；增加 Docker 与 LPK v2 打包，适配微服代理和持久化目录。
 
@@ -43,16 +44,16 @@ npm start
 
 **请使用 1.0.1 或更新版本。1.0.0 的入口翻译使用了安装器不接受的嵌套对象，会导致 `render lpk failed`，不应继续安装。**
 
-构建条件：`lzc-cli >= 2.0.0`、可用 Docker、联网获取固定的懒猫 Registry 基础镜像。安装需要 `lzcos >= 1.6.0`。当前构建目标是 **linux/amd64**。
+构建条件：`lzc-cli >= 2.0.9`、可用 Docker、联网获取固定的懒猫 Registry 基础镜像。安装需要 `lzcos >= 1.6.0`。当前构建目标是 **linux/amd64**，`lzc-build.yml` 使用本机 Docker 构建并打包内嵌镜像，不依赖已连接的微服。
 
 ```bash
 mkdir -p artifacts
-lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
-lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
-lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.3-amd64.lpk
+lzc-cli project release -o artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
+lzc-cli lpk info artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
+lzc-cli lpk install artifacts/abby.lzcapp.lottery-1.0.4-amd64.lpk
 ```
 
-- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.3`。
+- 应用名称：`lottery`；应用 ID：`abby.lzcapp.lottery`，版本 `1.0.4`。
 - LPK v2 采用 `embed:lottery` 打包应用层；运行不依赖开发电脑。基础镜像层通过已固定的懒猫 Registry 镜像获取。
 - 数据保存在微服 `/lzcapp/var/lottery/`，包括名单、设置和中奖记录；不会把开发电脑现有活动数据打入安装包。
 - 应用通过微服账号鉴权，无额外应用登录。所有获授权用户共享同一场活动，建议由一位主持人操作。

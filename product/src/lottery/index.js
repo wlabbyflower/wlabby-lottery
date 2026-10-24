@@ -75,6 +75,24 @@ let selectedCardIndex = [],
   isLotting = false,
   currentLuckys = [];
 
+let prizesCollapsed = false;
+try { prizesCollapsed = localStorage.getItem('lottery.prizesCollapsed') === 'true'; } catch { /* Browser storage may be disabled. */ }
+function applyPrizePanelState() {
+  const toggle = document.getElementById('prizePanelToggle');
+  document.getElementById('prizePanel').classList.toggle('collapsed', prizesCollapsed);
+  toggle.setAttribute('aria-expanded', String(!prizesCollapsed));
+  toggle.setAttribute('aria-label', prizesCollapsed ? '展开奖品列表' : '收起奖品列表');
+  toggle.title = toggle.getAttribute('aria-label');
+  document.getElementById('prizePanelToggleText').textContent = prizesCollapsed ? '展开奖品' : '收起';
+  const list = document.getElementById('prizeList');
+  if (list) list.hidden = prizesCollapsed;
+}
+document.getElementById('prizePanelToggle').addEventListener('click', () => {
+  prizesCollapsed = !prizesCollapsed;
+  applyPrizePanelState();
+  try { localStorage.setItem('lottery.prizesCollapsed', String(prizesCollapsed)); } catch { /* The toggle still works without storage. */ }
+});
+applyPrizePanelState();
 initAll();
 
 /**
@@ -133,6 +151,7 @@ function updatePrize() {
   if (currentPrizeIndex < 0) currentPrizeIndex = 0;
   currentPrize = prizes[currentPrizeIndex];
   resetPrize(currentPrizeIndex);
+  applyPrizePanelState();
   setPrizeData(currentPrizeIndex, (basicData.luckyUsers[currentPrize.type] || []).length, true);
 }
 async function api(url, data = {}) {

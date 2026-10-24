@@ -4,6 +4,7 @@ icon: ./lpk/icon.png
 contentdir: ./lpk/content
 images:
   lottery:
+    builder: local
     context: .
     dockerfile: ./Dockerfile
     upstream-match: registry.lazycat.cloud

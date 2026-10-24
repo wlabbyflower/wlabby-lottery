@@ -103,6 +103,27 @@ app.post('/reloadUsers', (req,res) => {
   transaction(s => { s.users = users; s.absent = []; });
   res.json({ count: users.length });
 });
+app.get('/users-template.xlsx', (req,res) => {
+  const roster = [
+    ['工号','姓名','部门','照片 URL','权重'],
+    ['001','张三','研发部','',1],
+    ['002','李四','运营部','',1]
+  ];
+  const instructions = [
+    ['项目','填写说明'],
+    ['操作步骤','在第一张“人员名单”表中替换示例人员，保留表头；保存为 .xlsx 后上传。第二张表仅供参考，不会导入。'],
+    ['工号','必填且唯一。使用文本格式以保留 001 等前导零；不要重复使用相同工号。'],
+    ['姓名','必填。'],
+    ['部门','可选。'],
+    ['照片 URL','可选；填写 http:// 或 https:// 开头的图片地址。不填可留空。'],
+    ['权重','可选，留空默认为 1；仅权重模式使用，范围 0–1000000，0 表示在权重模式下不参与。'],
+    ['注意','不要修改第一张表的列顺序。只在第一张表填写参与人员，不要把说明文字追加在人员行后。']
+  ];
+  res.attachment('users-template.xlsx').send(xlsx.build([
+    { name: '人员名单', data: roster, options: { '!cols': [{wch:16},{wch:16},{wch:20},{wch:48},{wch:12}] } },
+    { name: '填写说明', data: instructions, options: { '!cols': [{wch:18},{wch:110}] } }
+  ]));
+});
 app.post('/export', (req,res) => res.json({ type: 'success', url: '/results.xlsx' }));
 app.get('/results.xlsx', (req,res) => {
   const rows = [['奖项','奖品','工号','姓名','部门']];

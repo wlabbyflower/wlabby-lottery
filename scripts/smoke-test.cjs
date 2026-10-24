@@ -1,5 +1,6 @@
 const { chromium }=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const {spawn}=require('node:child_process'),fs=require('node:fs'),os=require('node:os'),assert=require('node:assert/strict');
+const xlsx=require('../server/node_modules/node-xlsx');
 const data=fs.mkdtempSync(os.tmpdir()+'/lottery-check-');
 const server=spawn('/usr/bin/node',['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
 (async()=>{let browser;try{
@@ -9,7 +10,26 @@ const server=spawn('/usr/bin/node',['server/index.js'],{cwd:require('node:path')
  await api('/settings',{...snapshot.cfgData,prizes:[{type:42,text:'测试奖',title:'礼物',count:7}],EACH_COUNT:[5]});
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.env.LOTTERY_TEST_DISABLE_WEBGL ? ['--disable-webgl'] : ['--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('dialog',d=>d.type()==='prompt'?d.accept('1'):d.accept());
+ await page.goto('http://127.0.0.1:18888/admin.html#people');
+ await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ const downloading=page.waitForEvent('download');await page.click('#downloadTemplate');const download=await downloading;
+ assert.equal(download.suggestedFilename(),'users-template.xlsx');
+ const templatePath=data+'/users-template.xlsx';await download.saveAs(templatePath);
+ const sheets=xlsx.parse(templatePath);assert.deepEqual(sheets[0].data[0],['工号','姓名','部门','照片 URL','权重']);
+ assert.equal(sheets[0].data[1][0],'001');assert.equal(sheets[1].name,'填写说明');
+ await page.setInputFiles('#file',templatePath);await page.click('#import');
+ await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('已导入 2 人'));
+ assert.equal(await page.locator('#peopleList tr').count(),2);
+ assert.deepEqual((await api('/getTempData')).users.map(u=>u[0]),['001','002']);
+ await api('/importUsers',{users:snapshot.users});
  await page.goto('http://127.0.0.1:18888');await page.waitForTimeout(4200);
+ assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'true');
+ await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),false);
+ assert.equal(await page.locator('.prize-mess').isVisible(),true);
+ await page.reload();await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
+ assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'false');
+ await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),true);
+ await page.waitForTimeout(4200);
  const mode=await page.evaluate(()=>window.lotteryRenderInfo());
  if(process.env.LOTTERY_TEST_DISABLE_WEBGL) {
    assert.equal(mode.mode,'css3d'); assert.equal(await page.locator('.element').count(),407);
@@ -27,7 +47,12 @@ const server=spawn('/usr/bin/node',['server/index.js'],{cwd:require('node:path')
    await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='ready');
  }
  await page.click('#enter');await page.waitForTimeout(4200);
- await page.click('#lottery',{force:true});await page.waitForTimeout(700);await page.click('#lottery',{force:true});await page.waitForTimeout(2000);
+ await page.click('#lottery',{force:true});await page.waitForTimeout(700);
+ await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),false);
+ await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),true);
+ await page.click('#prizePanelToggle');
+ await page.click('#lottery',{force:true});await page.waitForTimeout(2000);
+ assert.equal(await page.locator('#prizeList').isVisible(),false);assert.equal(await page.locator('.prize-mess').isVisible(),true);
  assert.equal(await page.locator('.prize').count(),5);const before=await api('/getTempData');assert.equal(before.luckyData[42].length,5);
  await page.screenshot({path:'/tmp/lottery-draw.png'});
  await page.click('#reLottery');await page.waitForTimeout(2600);const after=await api('/getTempData');assert.equal(after.luckyData[42].length,5);assert.equal(new Set(after.luckyData[42].map(u=>u[0])).size,5);
@@ -67,5 +92,5 @@ const server=spawn('/usr/bin/node',['server/index.js'],{cwd:require('node:path')
    assert.equal(await page.locator('.element').count(),0);
    assert.equal(await page.evaluate(()=>{const gl=document.querySelector('.gpu-scene').getContext('webgl2');return gl.getError()}),0);
  }
- assert.deepEqual(errors,[]);console.log('PASS: '+mode.mode+' rendering, draw, partial redraw, persistence, export, themes, sidebar, search and mobile layout'+(mode.mode==='webgl2'?', 2 draw calls, no background card DOM, stable atlas, visibility pause, context restoration, 803-card wall':''));
+ assert.deepEqual(errors,[]);console.log('PASS: '+mode.mode+' rendering, prize collapse during draw and after reload, Excel template download and import, draw, partial redraw, persistence, export, themes, sidebar, search and mobile layout'+(mode.mode==='webgl2'?', 2 draw calls, no background card DOM, stable atlas, visibility pause, context restoration, 803-card wall':''));
  }finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true});}})().catch(e=>{console.error(e);process.exitCode=1});
