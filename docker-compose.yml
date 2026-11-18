@@ -1,8 +1,0 @@
-services:
-  lottery:
-    build: .
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./server/cache:/lzcapp/var/upstream-lottery
-    restart: unless-stopped

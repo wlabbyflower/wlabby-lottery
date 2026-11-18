@@ -1,10 +1,5 @@
 manifest: ./lzc-manifest.yml
-icon: ./lpk/icon.png
 contentdir: ./lpk/content
+icon: ./lpk/icon.png
 pkgout: ./artifacts
-images:
-  lottery:
-    builder: local
-    context: .
-    dockerfile: ./Dockerfile
-    upstream-match: registry.lazycat.cloud
+buildscript: pnpm build && node lpk/prepare.mjs

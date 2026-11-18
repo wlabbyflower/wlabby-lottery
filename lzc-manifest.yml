@@ -1,58 +1,40 @@
-usage: |
-  本版直接基于 moshang-ax/lottery 的 vue 分支，保留原版大屏与抽奖流程。
-  点击左上角齿轮配置年份和背景；名单与奖项沿用原项目配置方式。
-  本版活动数据位于独立的 upstream-lottery 目录，不读取此前改造版的数据。
+usage: '本版仅新增可编辑年份及常用年份列表，其他抽奖逻辑保持上游行为。
+
+  进入“全局配置 → 界面配置 → 图案设置”，输入四位年份并点击“添加并应用年份”。
+
+  配置、名单、图片和中奖记录保存在当前浏览器。换设备或清除浏览器数据不会自动同步，请先导出备份。
+
+  默认图片和音乐部分使用上游在线资源，离线时请自行上传本地素材。'
 application:
-  subdomain: wlabby-lottery
-  image: embed:lottery
-  run_as: "1000:1000"
-  workdir: /app
-  environment:
-    HOST: 0.0.0.0
-    PORT: "8888"
-    LOTTERY_DATA_DIR: /lzcapp/var/upstream-lottery
-    LOTTERY_TRUST_PROXY: "1"
-    LOTTERY_PUBLIC_ORIGIN: "https://{{ .S.AppDomain }}"
+  image: registry.lazycat.cloud/abby/library/node:8084dbd2076b7ba6
+  subdomain: log-lottery
   routes:
-    - /=exec://8888,/app/start.sh
+  - /=exec://8080,/lzcapp/pkg/content/start.sh
   entries:
-    - id: settings
-      title: 年份与背景设置
-      path: /admin.html
-  health_check:
-    test_url: http://127.0.0.1:8888/health
-    start_period: 60s
-    timeout: 5s
+  - id: main
+    title: lottery
+    path: /log-lottery/
+  - id: settings
+    title: 抽奖配置
+    path: /log-lottery/config/global/face
   injects:
-    - id: lazycat-file-bridge
-      on: request
-      when:
-        - /__lazycat_file_bridge/*
-      do:
-        - src: |
-            const prefix = "/__lazycat_file_bridge";
-            const host = String(ctx.request.host || "").split(":")[0].toLowerCase();
-            const dot = host.indexOf(".");
-            const allowed = ["GET", "HEAD", "PUT"].includes(String(ctx.request.method || "").toUpperCase());
-            if (dot <= 0 || !host.endsWith(".heiyu.space") || !allowed) {
-              ctx.response.send(allowed ? 400 : 405, "Invalid file bridge request");
-              return;
-            }
-            ctx.headers.del("Origin");
-            ctx.headers.del("Referer");
-            ctx.proxy.to("https://file." + host.slice(dot + 1), {
-              path: "/files/home" + ctx.request.path.slice(prefix.length),
-              query: ctx.request.raw_query,
-              use_target_host: true,
-              timeout_ms: 120000,
-              on_fail: "error",
-            });
-    - id: file-chooser
-      on: browser
-      when:
-        - /*
-      do:
-        - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js
-          params:
-            fileBridgeRoot: /__lazycat_file_bridge
-            locale: auto
+  - id: lazycat-file-bridge
+    on: request
+    when:
+    - /__lazycat_file_bridge/*
+    do:
+    - src: "const h = String(ctx.request.host || \"\").split(\":\")[0].toLowerCase();\n\
+        const p = h.indexOf(\".\");\nconst m = String(ctx.request.method || \"\").toUpperCase();\n\
+        if (p <= 0 || !h.endsWith(\".heiyu.space\") || ![\"GET\", \"HEAD\", \"PUT\"\
+        ].includes(m)) {\n  ctx.response.send([\"GET\", \"HEAD\", \"PUT\"].includes(m)\
+        \ ? 400 : 405, \"Invalid file bridge request\");\n  return;\n}\nctx.headers.del(\"\
+        Origin\");\nctx.headers.del(\"Referer\");\nctx.proxy.to(\"https://file.\"\
+        \ + h.slice(p + 1), {\n  path: \"/files/home\" + ctx.request.path.slice(\"\
+        /__lazycat_file_bridge\".length),\n  query: ctx.request.raw_query,\n  use_target_host:\
+        \ true,\n  timeout_ms: 120000,\n  on_fail: \"error\"\n});\n"
+  - id: lazycat-file-chooser
+    on: browser
+    when:
+    - /*
+    do:
+    - src: file:///lzcapp/pkg/content/lazycat-injects/lzc-file-chooser-inject.js

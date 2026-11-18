@@ -1,19 +1,20 @@
 package: abby.lzcapp.lottery
-version: 2.0.0
+version: 2.0.1
 name: lottery
-description: 基于 moshang-ax/lottery 原版的年会抽奖，保留动态星空和 3D 名牌，支持年份及背景设置。
-author: wlabbyflower / moshang-ax
+description: 3D 年会抽奖，支持自由添加年份图案、名单与奖项配置。
+author: LOG1997 / Lazy Cat 社区适配
 license: MIT
 homepage: https://github.com/wlabbyflower/wlabby-lottery
-min_os_version: 1.6.0
+min_os_version: 1.5.0
 permissions:
-  required: []
+  required:
+    - net.internet
 locales:
   zh-CN:
     name: lottery
-    description: 原版星空 3D 抽奖，支持后台修改年份与背景。
-    entries.settings.title: 年份与背景设置
+    description: 3D 年会抽奖，支持自由添加年份图案。
+    entries.settings.title: 抽奖配置
   en-US:
     name: lottery
-    description: Original 3D lottery with configurable year and background.
-    entries.settings.title: Year and background
+    description: 3D lottery with editable year patterns.
+    entries.settings.title: Lottery settings

@@ -1,4 +1,2 @@
 #!/bin/sh
-set -eu
-cd /app
-exec node server/index.js 8888 n
+exec /usr/local/bin/node /lzcapp/pkg/content/serve.mjs
