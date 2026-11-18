@@ -49,7 +49,7 @@ export class GPUCardRenderer {
     this.states = new THREE.InstancedBufferAttribute(new Float32Array(count), 1);
     geometry.setAttribute('cardState', this.states);
     this.material = new THREE.ShaderMaterial({
-      uniforms: { atlas: { value: this.texture }, grid: { value: new THREE.Vector2(this.columns,this.rows) }, accent: { value: new THREE.Color('#70d9ff') }, background: { value: new THREE.Color('#edf3ff') }, ink: {value:new THREE.Color('#162743')}, time: { value: 0 }, dimmed: { value: 0 } },
+      uniforms: { atlas: { value: this.texture }, grid: { value: new THREE.Vector2(this.columns,this.rows) }, accent: { value: new THREE.Color('#70d9ff') }, background: { value: new THREE.Color('#edf3ff') }, ink: {value:new THREE.Color('#e6ffff')}, time: { value: 0 }, dimmed: { value: 0 } },
       transparent: true, depthWrite: true,
       vertexShader: `attribute vec2 labelOffset; attribute float cardState;
         varying vec2 cellUV; varying vec2 textUV; varying float state; varying float seed;
@@ -70,8 +70,9 @@ export class GPUCardRenderer {
           float highlighted = step(.5,state);
           float pulse = .5+.5*sin(time*.65+seed*1.71);
           float text = texture2D(atlas,textUV).a;
-          vec3 base = mix(vec3(1.),accent,.025+highlighted*.12+pulse*.008);
-          vec3 color = mix(base,accent,border*(.25+highlighted*.7));
+          vec3 glow = mix(accent, vec3(.98,.141,0.), highlighted);
+          vec3 base = mix(background, glow, .065 + pulse*.045 + highlighted*.72);
+          vec3 color = mix(base,glow,border*(.55+highlighted*.4));
           color = mix(color,ink,text);
           gl_FragColor = vec4(color,(.97+text*.03)*mix(1.0,.075,dimmed));
           #include <colorspace_fragment>

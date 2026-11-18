@@ -5,6 +5,7 @@ const xlsx = require('node-xlsx');
 const { timingSafeEqual } = require('node:crypto');
 const { validateUsers, available, draw, redraw } = require('./engine');
 const defaults = require('./config');
+const { validateAppearance } = require('./appearance');
 const dataDir = process.env.LOTTERY_DATA_DIR || path.join(__dirname, 'cache');
 fs.mkdirSync(dataDir, { recursive: true });
 const stateFile = path.join(dataDir, 'state.json');
@@ -28,6 +29,8 @@ if (fs.existsSync(clearJournal)) {
   atomic(stateFile, pending.state); atomic(configFile, pending.cfg); fs.unlinkSync(clearJournal);
 }
 let cfg = read(configFile, { ...defaults, title: '幸运抽奖', highlight: '幸运抽奖', background: '#000a14', theme: 'nebula' });
+// Older releases saved a light theme color that was never used as a background.
+cfg = { ...cfg, year: cfg.year ?? String(new Date().getFullYear()), background: cfg.backgroundMode ? cfg.background : '#000a14', backgroundMode: cfg.backgroundMode || 'stars', backgroundImage: cfg.backgroundImage || '' };
 delete cfg.mode; delete cfg.allowRepeat; delete cfg.designatedIDs;
 let state = read(stateFile, { users: excelUsers(path.join(__dirname, 'data/users.xlsx')), winners: read(path.join(dataDir, 'temp.json'), {}), absent: read(path.join(dataDir, 'error.json'), []) });
 state.users = state.users.map(user => user.slice(0,4));
@@ -113,7 +116,9 @@ app.post('/settings', (req,res) => {
   if (next.allowRepeat === true) throw new Error('同一场活动不允许重复中奖');
   if (next.designatedIDs && (!Array.isArray(next.designatedIDs) || next.designatedIDs.length)) throw new Error('不支持指定中奖人员');
   if (next.theme && !themeIDs.includes(next.theme)) throw new Error('主题不存在');
+  const appearance = validateAppearance(next, cfg);
   const validated = { theme: next.theme || cfg.theme || 'nebula', prizes: next.prizes.map(p => ({ type: p.type, text: String(p.text).slice(0,80), title: String(p.title || '').slice(0,120), count: p.count, img: /^https?:\/\//i.test(p.img || '') || /^\.?\.?\/img\//.test(p.img || '') ? p.img : '' })), EACH_COUNT: next.EACH_COUNT, COMPANY: String(next.COMPANY || '').slice(0,40), title: String(next.title || '幸运抽奖').slice(0,80), highlight: String(next.highlight || ''), background: next.background };
+  Object.assign(validated, appearance);
   atomic(configFile, validated); cfg = validated; res.json(cfg);
 });
 app.post('/importUsers', (req,res) => {
@@ -156,7 +161,10 @@ app.get('/results.xlsx', (req,res) => {
 });
 // Compatibility endpoint: results are already persisted by /draw.
 app.post('/saveData', (req,res) => res.json({ type: 'success' }));
-app.use(express.static(path.join(__dirname, '../product/dist')));
+app.use(express.static(path.join(__dirname, '../product/dist'), { setHeaders(res, file) {
+  // Vite fingerprints production bundles; event data always stays no-store.
+  res.set('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache');
+} }));
 app.use((err,req,res,next) => { console.error(err.message); res.status(400).json({ error: err.message }); });
 module.exports = { app, run(port = process.env.PORT || 8888) {
   return app.listen(Number(port), process.env.HOST || '0.0.0.0', () => console.log(`Lottery: http://0.0.0.0:${port}`));

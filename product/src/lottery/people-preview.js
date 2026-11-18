@@ -9,14 +9,14 @@ export class PeoplePreview {
     document.querySelectorAll('[data-preview-view]').forEach(button=>button.onclick=()=>this.setView(button.dataset.previewView));
     this.timer=setInterval(()=>{if(!document.hidden&&!this.paused&&!this.root.hidden&&this.view==='cards')this.move(1);},3000);
     window.addEventListener('pagehide',()=>clearInterval(this.timer),{once:true});
-    this.render(); this.setView('cards');
+    this.render(); this.setView(users.length ? 'wall' : 'cards');
   }
   setUsers(users) {this.users=users;this.page=0;this.render();}
   setView(view) {
     this.view=view;
     this.root.dataset.view=view;
     document.querySelectorAll('[data-preview-view]').forEach(button=>{const active=button.dataset.previewView===view;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
-    document.getElementById('previewHint').textContent=view==='sphere'?'拖动旋转 · 滚轮缩放 · 触屏可滑动':'每 3 秒自动换一批 · 可暂停或翻页 · 不影响抽奖概率';
+    document.getElementById('previewHint').textContent=view!=='cards'?'拖动旋转 · 滚轮缩放 · 触屏可滑动':'每 3 秒自动换一批 · 可暂停或翻页 · 不影响抽奖概率';
     this.onViewChange(view);
   }
   move(step) {const pages=Math.max(1,Math.ceil(this.users.length/this.size));this.page=(this.page+step+pages)%pages;this.render();}

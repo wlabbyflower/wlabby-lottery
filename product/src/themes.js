@@ -1,14 +1,16 @@
 export const THEMES = [
-  { id: 'nebula', name: '晴空蓝', subtitle: 'CLEAR BLUE', description: '明亮蓝白 · 清晰名牌', accent: '#2563eb', accent2: '#60a5fa', background: '#edf3ff', ink: '#162743', rgb: '37, 99, 235' },
-  { id: 'violet', name: '柔雾紫', subtitle: 'SOFT VIOLET', description: '柔和浅紫 · 简洁优雅', accent: '#7c3aed', accent2: '#a78bfa', background: '#f4f0fc', ink: '#302041', rgb: '124, 58, 237' },
-  { id: 'aurora', name: '清新绿', subtitle: 'FRESH GREEN', description: '清爽绿白 · 舒适易读', accent: '#047857', accent2: '#34d399', background: '#edf7f2', ink: '#17382c', rgb: '4, 120, 87' },
-  { id: 'solar', name: '暖金庆典', subtitle: 'WARM GOLD', description: '温暖米金 · 适合庆典', accent: '#ad5a10', accent2: '#fbbf24', background: '#fff6e8', ink: '#432b18', rgb: '173, 90, 16' },
+  { id: 'nebula', name: '原版星空', subtitle: 'CLASSIC', description: '深色星空 · 青色卡片 · 橙色年份', accent: '#7fffff', accent2: '#fd6900', background: '#000a14', ink: '#e6ffff', rgb: '127, 255, 255', adminAccent: '#187c91', adminBackground: '#edf3f7' },
+  { id: 'violet', name: '紫色星空', subtitle: 'VIOLET', description: '深紫星空 · 紫色卡片', accent: '#c4a4ff', accent2: '#ffb15c', background: '#10091f', ink: '#f3ebff', rgb: '196, 164, 255', adminAccent: '#7c3aed', adminBackground: '#f4f0fc' },
+  { id: 'aurora', name: '极光绿', subtitle: 'AURORA', description: '墨绿星空 · 绿色卡片', accent: '#71edbc', accent2: '#ffbf63', background: '#021810', ink: '#e5fff4', rgb: '113, 237, 188', adminAccent: '#047857', adminBackground: '#edf7f2' },
+  { id: 'solar', name: '庆典金', subtitle: 'GOLD', description: '深色背景 · 金色卡片', accent: '#ffd382', accent2: '#ff754f', background: '#1a1007', ink: '#fff5e3', rgb: '255, 211, 130', adminAccent: '#ad5a10', adminBackground: '#fff6e8' },
 ];
-export function applyTheme(id = 'nebula') {
+export function applyTheme(id = 'nebula', screen = false) {
   const theme = THEMES.find(t => t.id === id) || THEMES[0];
   document.documentElement.dataset.theme = theme.id;
-  document.documentElement.style.colorScheme='light';
-  for (const [key, value] of Object.entries({ '--accent': theme.accent, '--accent-2': theme.accent2, '--accent-rgb': theme.rgb, '--space': theme.background, '--ink':theme.ink, '--surface':'#ffffff' })) document.documentElement.style.setProperty(key, value);
+  document.documentElement.style.colorScheme = screen ? 'dark' : 'light';
+  const accent = screen ? theme.accent : theme.adminAccent;
+  const rgb = screen ? theme.rgb : accent.match(/[a-f0-9]{2}/gi).map(n => parseInt(n,16)).join(', ');
+  for (const [key, value] of Object.entries({ '--accent': accent, '--accent-2': theme.accent2, '--accent-rgb': rgb, '--space': screen ? theme.background : theme.adminBackground, '--ink': screen ? theme.ink : '#162743', '--surface': screen ? '#071c28' : '#ffffff' })) document.documentElement.style.setProperty(key, value);
   window.dispatchEvent(new CustomEvent('lottery-theme-change', {detail:theme}));
   return theme;
 }

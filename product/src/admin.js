@@ -1,11 +1,12 @@
 import './admin.css';
 import './admin-event.css';
 import { THEMES, applyTheme, icon } from './themes.js';
+import { applyBackground } from './appearance.js';
 const $ = id => document.getElementById(id);
-let cfg, state, selectedTheme = 'nebula', dirty = false;
+let cfg, state, selectedTheme = 'nebula', dirty = false, uploadedBackground = '', readingBackground = false;
 const panels = {
   basic: ['基础设置', '设置活动名称、人员名牌和大屏展示内容。'],
-  appearance: ['UI 主题', '选择明亮清晰的配色，预览大屏名牌的显示效果。'],
+  appearance: ['UI 主题', '设置年份卡片墙、星空配色和背景图片。'],
   people: ['名单导入', '下载 Excel 模板，导入和检查全部参与人员。'],
   winners: ['中奖名单', '按奖项查看中奖人员，导出本场活动结果。'],
   prizes: ['奖品设置', '为每一份期待，准备值得揭晓的惊喜。'],
@@ -35,11 +36,41 @@ function markDirty() { if(!cfg) return; dirty = true; status('有未保存的修
 document.querySelectorAll('input:not([type=file]),textarea,select').forEach(el => { if(!['peopleSearch','winnerFilter','rows'].includes(el.id)) el.addEventListener('input',markDirty); });
 window.addEventListener('beforeunload', event => { if(dirty) { event.preventDefault(); event.returnValue = ''; } });
 function chooseTheme(id, changed = false) {
-  const theme = applyTheme(id); selectedTheme = theme.id; $('background').value = theme.background;
+  const theme = applyTheme(id); selectedTheme = theme.id;
   document.querySelectorAll('.theme-choice').forEach(button => { const active = button.dataset.id === theme.id; button.classList.toggle('selected',active); button.setAttribute('aria-pressed', String(active)); });
   $('previewThemeName').textContent = theme.name;
-  if(changed) markDirty();
+  if(changed) { $('background').value = theme.background; markDirty(); }
+  updateAppearancePreview();
 }
+function updateAppearancePreview() {
+  const stage = document.querySelector('.theme-stage');
+  applyBackground(stage, { background: $('background').value, backgroundMode: $('backgroundMode').value, backgroundImage: uploadedBackground || $('backgroundImage').value.trim() });
+  const theme = THEMES.find(t => t.id === selectedTheme);
+  stage.style.setProperty('--stage-accent', theme.accent);
+  $('previewYear').textContent = $('year').value || new Date().getFullYear();
+}
+for (const id of ['year','background','backgroundMode','backgroundImage']) $(id).addEventListener('input', () => {
+  if(id === 'backgroundImage') { uploadedBackground = ''; $('backgroundImageHint').textContent = '外部图片需要能从浏览器访问。'; }
+  updateAppearancePreview();
+});
+$('backgroundFile').addEventListener('change', async () => {
+  const file = $('backgroundFile').files[0]; if(!file) return;
+  readingBackground = true; $('save').disabled = true;
+  try {
+    if(file.size > 5 * 1024 * 1024 || !['image/png','image/jpeg','image/webp','image/gif'].includes(file.type)) throw new Error('请选择 5MB 以内的 PNG、JPEG、WebP 或 GIF');
+    const image = await new Promise((resolve,reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('图片读取失败')); reader.readAsDataURL(file); });
+    const preview = new Image(); preview.src = image;
+    try { await preview.decode(); } catch { throw new Error('图片无法解码，请选择有效图片'); }
+    uploadedBackground = image; $('backgroundImage').value = ''; $('backgroundMode').value = 'image';
+    $('backgroundImageHint').textContent = `已选择本地图片：${file.name}，点击保存后持久生效。`;
+    updateAppearancePreview(); markDirty();
+  } catch(error) { status(error.message,true); }
+  finally { readingBackground = false; $('save').disabled = false; $('backgroundFile').value = ''; }
+});
+$('removeBackground').onclick = () => {
+  uploadedBackground = ''; $('backgroundImage').value = ''; $('backgroundFile').value = ''; $('backgroundMode').value = 'stars';
+  $('backgroundImageHint').textContent = '已移除自定义图片，点击保存后生效。'; updateAppearancePreview(); markDirty();
+};
 for(const theme of THEMES) {
   const button = document.createElement('button'); button.className = 'theme-choice'; button.dataset.id = theme.id; button.style.setProperty('--swatch', theme.accent); button.style.setProperty('--theme-bg',theme.background); button.setAttribute('aria-label',`${theme.name}：${theme.description}`);
   button.innerHTML = `<div class="theme-art"><i></i></div><div class="theme-choice-info"><strong>${theme.name}</strong><small>${theme.subtitle}</small></div><span class="theme-check" aria-hidden="true">✓</span>`;
@@ -93,6 +124,10 @@ async function refreshData() { state = await api('/getTempData'); renderData(); 
 async function load() {
   state = await api('/getTempData'); cfg = state.cfgData;
   $('title').value = cfg.title; $('previewTitle').textContent = cfg.title; $('company').value = cfg.COMPANY; $('highlight').value = cfg.highlight;
+  $('year').value = cfg.year; $('background').value = cfg.background; $('backgroundMode').value = cfg.backgroundMode;
+  uploadedBackground = cfg.backgroundImage?.startsWith('data:') ? cfg.backgroundImage : '';
+  $('backgroundImage').value = uploadedBackground ? '' : cfg.backgroundImage || '';
+  $('backgroundImageHint').textContent = uploadedBackground ? '已保存本地背景图片，可重新上传或移除。' : '也可填写图片网址；外部图片需要能从浏览器访问。';
   chooseTheme(cfg.theme); $('prizes').replaceChildren(); cfg.prizes.forEach((p,i) => prizeRow(p,cfg.EACH_COUNT[i]));
   renderData(); dirty = false;
 }
@@ -104,12 +139,13 @@ on('add', () => {
 });
 on('save', async () => {
   if(!cfg) throw new Error('设置仍在加载，请稍后重试。');
+  if(readingBackground) throw new Error('背景图片仍在读取，请稍后保存。');
   const prizes = [], counts = [];
   for(const tr of $('prizes').children) {
     const values = Object.fromEntries(Array.from(tr.querySelectorAll('input'), input=>[input.dataset.key,input.value]));
     prizes.push({ type: Number(tr.dataset.type), text: values.text, title: values.title, count: Number(values.count), img: tr.dataset.img }); counts.push(Number(values.each));
   }
-  await api('/settings', { theme: selectedTheme, title: $('title').value, COMPANY: $('company').value, highlight: $('highlight').value, background: $('background').value, prizes, EACH_COUNT: counts });
+  await api('/settings', { theme: selectedTheme, title: $('title').value, COMPANY: $('company').value, highlight: $('highlight').value, background: $('background').value, year: $('year').value, backgroundMode: $('backgroundMode').value, backgroundImage: uploadedBackground || $('backgroundImage').value.trim(), prizes, EACH_COUNT: counts });
   await load(); status('设置已保存 · 刷新抽奖大屏即可应用。');
 });
 on('import', async () => {

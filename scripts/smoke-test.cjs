@@ -10,12 +10,12 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
  const snapshot=await api('/getTempData');
  const cfg={...snapshot.cfgData,prizes:[{type:1,text:'一等奖',title:'礼物一',count:2},{type:2,text:'二等奖',title:'礼物二',count:3}],EACH_COUNT:[2,3]};
  await api('/settings',cfg);
- for(const bad of [{mode:'weighted'},{mode:'designated',designatedIDs:['001']},{allowRepeat:true},{designatedIDs:['001']}]) {
+ for(const bad of [{year:'20x6'},{backgroundMode:'invalid'},{backgroundMode:'image',backgroundImage:''},{backgroundImage:'javascript:alert(1)'},{backgroundImage:'data:image/png;base64,PHN2Zz4='},{mode:'weighted'},{mode:'designated',designatedIDs:['001']},{allowRepeat:true},{designatedIDs:['001']}]) {
   const r=await fetch(base+'/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cfg,...bad})});assert.equal(r.status,400);
  }
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.env.LOTTERY_TEST_DISABLE_WEBGL?['--disable-webgl']:['--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1600,height:1000}}),errors=[];
- page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('dialog',d=>d.type()==='prompt'?d.accept('1'):d.accept());
+ page.on('response',r=>{if(r.status()>=400)console.error('HTTP',r.status(),r.url())});page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});page.on('dialog',d=>d.type()==='prompt'?d.accept('1'):d.accept());
  await page.goto(base+'/admin.html#people');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
  const downloading=page.waitForEvent('download');await page.click('#downloadTemplate');const download=await downloading;const templatePath=data+'/template.xlsx';await download.saveAs(templatePath);
  const sheets=xlsx.parse(templatePath);assert.deepEqual(sheets[0].data[0],['工号','姓名','部门','照片 URL']);assert.equal(sheets[0].data[1][0],'001');assert.equal(sheets[1].name,'填写说明');
@@ -23,7 +23,16 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
  assert.deepEqual((await api('/getTempData')).users.map(u=>u[0]),['001','002']);
  const invalid=await fetch(base+'/importUsers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:[['1','甲','','',100]]})});assert.equal(invalid.status,400);
  await api('/importUsers',{users:snapshot.users});
+ await api('/settings',{...cfg,prizes:[],EACH_COUNT:[]});
+ await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');
+ assert.equal(await page.getAttribute('#peoplePreview','data-view'),'cards');assert.equal(await page.locator('.person-preview-card').count(),24);assert.ok(await page.locator('[data-preview-view="wall"]').isDisabled());
+ await api('/settings',cfg);
  await page.goto(base);await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
+ assert.equal(await page.getAttribute('#peoplePreview','data-view'),'wall');
+ await page.waitForTimeout(2200);
+ assert.equal(await page.evaluate(()=>document.documentElement.style.colorScheme),'dark');
+ await page.screenshot({path:'/tmp/lottery-classic-wall.png'});
+ await page.click('[data-preview-view="cards"]');
  assert.equal(await page.locator('.person-preview-card').count(),24);
  assert.ok(await page.locator('.person-name').first().evaluate(el=>parseFloat(getComputedStyle(el).fontSize))>=20);
  const shape=await page.locator('.person-preview-card').first().boundingBox();assert.ok(shape.height>shape.width);
@@ -31,7 +40,7 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
  const first=await page.locator('.person-id').allTextContents();await page.click('#previewNext');assert.notDeepEqual(await page.locator('.person-id').allTextContents(),first);
  await page.click('#previewPrevious');assert.deepEqual(await page.locator('.person-id').allTextContents(),first);
  await page.click('#previewPause');assert.equal(await page.getAttribute('#previewPause','aria-pressed'),'true');
- await page.screenshot({path:'/tmp/lottery-bright-preview.png'});
+ await page.screenshot({path:'/tmp/lottery-classic-preview.png'});
  await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),false);
  await page.reload();await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.getAttribute('#prizePanelToggle','aria-expanded'),'false');
  await page.click('#prizePanelToggle');assert.equal(await page.locator('#prizeList').isVisible(),true);
@@ -48,7 +57,7 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
   await page.evaluate(()=>{window.testLoseContext=document.querySelector('.gpu-scene').getContext('webgl2').getExtension('WEBGL_lose_context');window.testLoseContext.loseContext()});await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='context-lost');
   await page.evaluate(()=>window.testLoseContext.restoreContext());await page.waitForFunction(()=>document.documentElement.dataset.rendererState==='ready');
  }
- await page.screenshot({path:'/tmp/lottery-bright-sphere.png'});
+ await page.screenshot({path:'/tmp/lottery-classic-sphere.png'});
  await page.click('#enter');await page.waitForTimeout(2200);
  const draw=async()=>{await page.click('#lottery');await page.waitForTimeout(1400);await page.click('#lottery');await page.waitForTimeout(1900)};
  await draw();assert.equal(await page.locator('.prize').count(),3);
@@ -64,11 +73,34 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
  await page.goto(base+'/admin.html#rules');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));assert.equal(await page.locator('#mode,#designated,#repeat').count(),0);
  await page.click('[data-panel="appearance"]');assert.equal(await page.locator('.theme-choice').count(),4);
  for(const id of ['violet','aurora','solar','nebula']){await page.click(`[data-id="${id}"]`);assert.equal(await page.locator('html').getAttribute('data-theme'),id);}
- await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));await page.screenshot({path:'/tmp/lottery-bright-settings.png'});
+ await page.fill('#year','2030');
+ const picture=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');
+ await page.setInputFiles('#backgroundFile',{name:'background.png',mimeType:'image/png',buffer:picture});
+ await page.waitForFunction(()=>document.querySelector('#backgroundMode').value==='image');
+ await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ const appearance=await api('/getTempData');assert.equal(appearance.cfgData.year,'2030');assert.equal(appearance.cfgData.backgroundMode,'image');assert.ok(appearance.cfgData.backgroundImage.startsWith('data:image/png;base64,'));
+ await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ assert.equal(await page.inputValue('#year'),'2030');assert.equal(await page.inputValue('#backgroundMode'),'image');
+ await page.screenshot({path:'/tmp/lottery-classic-settings.png'});
  for(const selector of ['.back-screen','.header-actions [data-return-screen]']) {await page.goto(base+'/admin.html');await page.setViewportSize({width:1366,height:600});await page.locator(selector).click();await page.waitForURL(base+'/');assert.equal(browser.contexts()[0].pages().length,1);}
- await page.goto(base);await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/lottery-bright-mobile.png'});
+ await page.goto(base);await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:'/tmp/lottery-classic-mobile.png'});
 
  // Clear controls use isolated test data only; never touch the live event.
+ await page.goto(base+'/admin.html#data');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ const backgroundConfig=(await api('/getTempData')).cfgData;
+ assert.equal((await fetch(base+'/getTempData',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).headers.get('cache-control'),'no-store');
+ await page.goto(base);await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');
+ assert.equal(await page.getAttribute('body','data-background'),'image');
+ assert.ok(await page.locator('body').evaluate(el=>el.style.getPropertyValue('--background-image').includes('data:image/png')));
+ await page.goto(base+'/admin.html#appearance');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
+ await page.click('#removeBackground');await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ assert.equal((await api('/getTempData')).cfgData.backgroundImage,'');
+ await page.selectOption('#backgroundMode','solid');await page.locator('#background').fill('#123456');
+ await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ await page.goto(base);await page.waitForFunction(()=>typeof window.lotteryRenderInfo==='function');assert.equal(await page.getAttribute('body','data-background'),'solid');
+ assert.equal(await page.locator('body').evaluate(el=>el.style.getPropertyValue('--background-color')),'#123456');
+ // Restore the original test appearance before checking independent clear scopes.
+ await api('/settings',cfg);
  await page.goto(base+'/admin.html#data');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));
  const archived=await (await fetch(base+'/backup.json')).json();assert.equal(Object.values(archived.state.winners).flat().length,5);assert.equal(archived.state.users.length,132);
  const roster=xlsx.parse(Buffer.from(await (await fetch(base+'/users.xlsx')).arrayBuffer()))[0].data;assert.equal(roster.length,133);
@@ -78,16 +110,16 @@ let server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').
  const clear=async(panel,button)=>{await page.click(`[data-panel="${panel}"]`);await page.click(button);await page.click('#confirmClear');await page.locator('#clearDialog').waitFor({state:'hidden'});};
  await clear('winners','#reset');let cleared=await api('/getTempData');assert.equal(Object.values(cleared.luckyData).flat().length,0);assert.equal(cleared.users.length,132);assert.equal(cleared.cfgData.prizes.length,2);
  await clear('people','#clearPeople');cleared=await api('/getTempData');assert.equal(cleared.users.length,0);assert.equal(cleared.cfgData.prizes.length,2);
- await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');assert.ok(await page.locator('#enter').isDisabled());assert.equal(await page.locator('.preview-empty').count(),1);
+ await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');assert.ok(await page.locator('#enter').isDisabled());assert.equal(await page.locator('.preview-empty').count(),1);assert.ok(await page.locator('[data-preview-view="wall"]').isDisabled());
  await page.goto(base+'/admin.html#prizes');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));await clear('prizes','#clearPrizes');cleared=await api('/getTempData');assert.equal(cleared.cfgData.prizes.length,0);
  await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
- await api('/importUsers',{users:snapshot.users});await api('/settings',cfg);await api('/draw',{type:2});
+ await api('/importUsers',{users:snapshot.users});await api('/settings',{...cfg,year:'2031',backgroundMode:'image',backgroundImage:backgroundConfig.backgroundImage});await api('/draw',{type:2});
  await page.goto(base+'/admin.html#data');await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('控制台已连接'));await clear('data','#clearAll');
  const saved=await api('/getTempData');assert.equal(saved.users.length,0);assert.deepEqual(saved.luckyData,{});assert.deepEqual(saved.cfgData.prizes,[]);assert.equal(saved.cfgData.title,cfg.title);assert.equal(saved.cfgData.theme,cfg.theme);
  const stopped=new Promise(resolve=>server.once('exit',resolve));server.kill();await stopped;
  server=spawn(process.execPath,['server/index.js'],{cwd:require('node:path').resolve(__dirname,'..'),env:{...process.env,PORT:'18888',LOTTERY_DATA_DIR:data},stdio:'pipe'});
  for(let i=0;i<60;i++){try{await fetch(base+'/health');break}catch{await new Promise(r=>setTimeout(r,100))}}
- assert.deepEqual(await api('/getTempData'),saved);await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');
+ assert.equal(saved.cfgData.year,'2031');assert.equal(saved.cfgData.backgroundMode,'image');assert.ok(saved.cfgData.backgroundImage.startsWith('data:image/png'));assert.deepEqual(await api('/getTempData'),saved);await page.goto(base);await page.waitForFunction(()=>window.lotteryRenderInfo?.().mode==='empty');
  console.log('PASS: backups, clear cancellation and scope confirmation, linked-result protection, independent clears, full clear, empty screen and restart persistence');
  assert.deepEqual(errors,[]);console.log('PASS: compact 24-person portrait preview, paging, four-column Excel round trip, unfair API rejection, '+mode.mode+' rendering, sphere drag/zoom, draw, cross-prize exclusion, redraw, final results and reload, export, themes and mobile layout');
 }finally{await browser?.close();server.kill();fs.rmSync(data,{recursive:true,force:true})}})().catch(e=>{console.error(e);process.exitCode=1});

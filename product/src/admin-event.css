@@ -4,3 +4,9 @@
 @media(max-height:700px) and (min-width:651px){.sidebar{padding-top:18px;padding-bottom:12px}.brand{padding-bottom:18px}.sidebar-bottom{bottom:-12px}.station-status{display:none}.nav-item{padding-top:10px;padding-bottom:10px}}
 
 dialog{max-width:620px;width:calc(100% - 36px);padding:28px;border:1px solid #263f6026;border-radius:16px;color:var(--ink);background:var(--surface);box-shadow:0 20px 80px #16274333}dialog::backdrop{background:#16274366}dialog p{line-height:1.8}dialog .button-row{flex-wrap:wrap}
+
+/* Keep the console light while previewing the original dark lottery screen. */
+.theme-art{background:var(--theme-bg)!important}.theme-art:before{background:color-mix(in srgb,var(--swatch) 25%,#00222d)!important;border-color:var(--swatch)!important;box-shadow:12px 10px 0 #ffffff10!important}.theme-art:after{color:var(--swatch)}
+.theme-stage{background:var(--background-image) center/cover no-repeat,var(--background-color,#000a14);color:#e6ffff;isolation:isolate}.theme-stage[data-background=stars]{background-image:url('/img/starfield.svg')}.theme-stage[data-background=image]:before{content:"";position:absolute;inset:0;background:#0004;z-index:-1}.preview-heading{color:#e6ffff}.preview-heading small{color:#9bc9ce}.preview-year{display:block;color:#fd8a3a;font:bold 34px/1.4 monospace;letter-spacing:10px}.preview-person,.preview-person.featured{background:#003b43b8;border-color:var(--stage-accent);color:#e6ffff}.preview-person strong{color:#e6ffff}.preview-person small,.preview-person span{color:var(--stage-accent)}.preview-cta{background:transparent;color:var(--stage-accent);border:1px solid var(--stage-accent)}input[type=color]{height:46px;padding:5px}
+
+.theme-stage{min-height:400px;height:auto;padding-top:24px;padding-bottom:28px}.preview-heading{position:relative;top:auto}.preview-cards{position:relative;top:auto;margin-top:20px}.preview-cta{position:relative;bottom:auto;margin:24px auto 0;width:max-content}

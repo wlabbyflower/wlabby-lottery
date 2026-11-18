@@ -1,3 +1,5 @@
+import { NUMBER_MATRIX } from "./config.js";
+import { applyBackground } from "../appearance.js";
 import { PeoplePreview } from "./people-preview.js";
 import * as THREE from "three";
 import { TrackballControls } from "three/addons/controls/TrackballControls.js";
@@ -109,13 +111,15 @@ async function initAll() {
     document.querySelector('#eventTitle').textContent = screenConfig.title;
     setupThemes(screenConfig.theme);
     updateTelemetry(data);
-    HIGHLIGHT_CELL = [];
+    applyBackground(document.body, screenConfig);
+    HIGHLIGHT_CELL = createYearHighlight(screenConfig.year);
     basicData = { prizes, users: data.users, leftUsers: data.leftUsers, luckyUsers: data.luckyData };
 
     TOTAL_CARDS = ROW_COUNT * COLUMN_COUNT;
     if (!basicData.users.length || !prizes.length) {
       preview = new PeoplePreview(basicData.users,screenConfig.highlight || screenConfig.title,onPreviewView);
-      document.querySelector('[data-preview-view="sphere"]').disabled=true;
+      preview.setView('cards');
+      document.querySelectorAll('[data-preview-view="sphere"],[data-preview-view="wall"]').forEach(button => button.disabled=true);
       document.getElementById('enter').disabled=true;
       document.getElementById('enter').textContent=!basicData.users.length?'请先导入人员名单':'请先配置奖品';
       document.getElementById('prizeBar').textContent=prizes.length?'奖项已保留，请先导入人员':'暂无奖品，请在设置中添加';
@@ -137,7 +141,7 @@ function setupThemes(id) {
   document.querySelectorAll('[data-icon]').forEach(el => el.innerHTML = icon(el.dataset.icon));
   const menu = document.querySelector('#themeMenu'), toggle = document.querySelector('#themeToggle');
   function select(id) {
-    const selected = applyTheme(id);
+    const selected = applyTheme(id, true);
     document.querySelector('#themeLabel').textContent = selected.name;
     menu.querySelectorAll('button').forEach(button => button.setAttribute('aria-checked', String(button.dataset.theme === selected.id)));
   }
@@ -159,7 +163,8 @@ function activityComplete() {
 }
 function refreshDrawButton() { btns.lottery.textContent=activityComplete()?'查看抽奖结果':'开始抽奖'; }
 function onPreviewView(view) {
-  if(view==='sphere' && scene && targets.sphere.length) { camera.position.set(0,0,3000);camera.up.set(0,1,0);camera.lookAt(new THREE.Vector3());transform(targets.sphere,700); }
+  if(view==='wall' && scene) { fitTableCamera(); addHighlight(); transform(targets.table,700); }
+  if(view==='sphere' && scene && targets.sphere.length) { removeHighlight();fitSphereCamera();transform(targets.sphere,700); }
   updateStage();
 }
 function updateStage() {
@@ -198,6 +203,19 @@ async function api(url, data = {}) {
   return result;
 }
 
+function createYearHighlight(year) {
+  return String(year).split('').flatMap((digit, index) =>
+    (NUMBER_MATRIX[Number(digit)] || []).map(([x,y]) => `${x + 1 + index * 4}-${y + 1}`));
+}
+function fitSphereCamera() {
+  const distance = Math.max(3000, 1000 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / camera.aspect);
+  camera.position.set(0, 0, distance); camera.up.set(0,1,0); camera.lookAt(new THREE.Vector3());
+}
+function fitTableCamera() {
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  camera.position.set(0, 0, Math.max(1900, 1400 / Math.tan(halfFov) / (Math.max(innerWidth < 700 ? innerWidth - 30 : innerWidth - 320, 250) / innerHeight), 850 / Math.tan(halfFov)));
+  camera.up.set(0,1,0); camera.lookAt(new THREE.Vector3());
+}
 function initCards() {
   const members = basicData.users;
   const showTable = basicData.leftUsers.length === members.length;
@@ -235,13 +253,13 @@ function initCards() {
     object.position.set(Math.random()*4000-2000,Math.random()*4000-2000,Math.random()*4000-2000);
     scene.add(object); threeDCards.push(object);
     if(gpu) { gpu.setLabel(i,member,COMPANY); gpu.setHighlight(i,highlighted && showTable); }
-    const table=new THREE.Object3D(); table.position.set(column*140-centerX,-row*180+centerY); targets.table.push(table);
+    const table=new THREE.Object3D(); table.position.set(column*140-centerX+(innerWidth < 700 ? 0 : 170),-row*180+centerY); targets.table.push(table);
     const sphere=new THREE.Object3D(),phi=Math.acos(-1+2*i/TOTAL_CARDS),theta=Math.sqrt(TOTAL_CARDS*Math.PI)*phi;
     sphere.position.setFromSphericalCoords(800,phi,theta); vector.copy(sphere.position).multiplyScalar(2); sphere.lookAt(vector); targets.sphere.push(sphere);
   }
   if(gpu) gpu.objects=threeDCards;
   controls=new TrackballControls(camera,renderer.domElement);
-  controls.staticMoving=true; controls.rotateSpeed=.5; controls.minDistance=500; controls.maxDistance=Math.max(6000,COLUMN_COUNT*220);
+  controls.staticMoving=true; controls.rotateSpeed=.5; controls.minDistance=500; controls.maxDistance=Math.max(12000,COLUMN_COUNT*220);
   controls.addEventListener('change',render);
   controls.addEventListener('start',()=>{dragging=true;render();});
   controls.addEventListener('end',()=>{dragging=false;render();});
@@ -311,12 +329,11 @@ function switchScreen(type) {
     case "enter":
       btns.enter.classList.remove("none");
       btns.lotteryBar.classList.add("none");
-      preview?.setView("cards");
+      preview?.setView("wall");
       transform(targets.table, 1000);
       break;
     default:
-      camera.position.set(0, 0, 3000);
-      camera.lookAt(new THREE.Vector3());
+      fitSphereCamera();
       btns.enter.classList.add("none");
       btns.lotteryBar.classList.remove("none");
       preview?.setView("sphere");
@@ -444,6 +461,7 @@ function rotateBall() {
 function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  if(!currentLuckys.length && !isLotting) { if(preview?.view==='wall') fitTableCamera(); else if(preview?.view==='sphere') fitSphereCamera(); }
   if(gpu) { gpu.setSize(innerWidth,innerHeight); gpu.updateOverlay(); }
   else renderer.setSize(innerWidth,innerHeight);
   render();
@@ -479,9 +497,11 @@ function selectCard(duration = 600) {
     tag = -(currentLuckys.length - 1) / 2,
     locates = [];
 
-  const columns = Math.min(5, currentLuckys.length);
+  const columns = Math.min(innerWidth < 700 ? 2 : 5, currentLuckys.length);
   const rows = Math.ceil(currentLuckys.length / columns);
   const spacing = Math.min(140, 650 / columns);
+  const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const resultDistance = Math.max(800, (columns * spacing / 2 + 40) / (tangent * camera.aspect), (rows * 180 / 2 + 100) / tangent);
   for (let i = 0; i < currentLuckys.length; i++) {
     const row = Math.floor(i / columns), rowLength = Math.min(columns, currentLuckys.length - row * columns);
     locates.push({ x: ((i % columns) - (rowLength - 1)/2) * spacing, y: ((rows - 1)/2 - row) * 180 });
@@ -499,7 +519,7 @@ function selectCard(duration = 600) {
         {
           x: locates[index].x,
           y: locates[index].y * Resolution,
-          z: Math.min(2200, 3000 - Math.max(800, Math.ceil(currentLuckys.length/5) * 270))
+          z: 3000 - resultDistance
         },
         Math.random() * duration + duration
       )

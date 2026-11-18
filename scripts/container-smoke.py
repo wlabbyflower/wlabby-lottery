@@ -37,7 +37,10 @@ with tempfile.TemporaryDirectory(prefix='lottery-lpk-check-') as data_dir:
                         '--entrypoint', '/app/run.sh', image], check=True, stdout=subprocess.DEVNULL)
         assert ready()['users'] == 132
         with urllib.request.urlopen(base + '/admin.html') as response:
-            assert '星际控制台' in response.read().decode()
+            assert '活动抽奖控制台' in response.read().decode()
+        settings = api('/getTempData', {})['cfgData']
+        settings.update(year='2032', backgroundMode='solid', background='#123456')
+        api('/settings', settings, 'https://lottery-test.example')
         assert api('/theme', {'theme': 'violet'}, 'https://lottery-test.example')['theme'] == 'violet'
         try:
             api('/theme', {'theme': 'solar'}, 'https://evil.example')
@@ -51,6 +54,8 @@ with tempfile.TemporaryDirectory(prefix='lottery-lpk-check-') as data_dir:
         ready()
         restored = api('/getTempData', {})
         assert restored['cfgData']['theme'] == 'violet'
+        assert restored['cfgData']['year'] == '2032'
+        assert restored['cfgData']['background'] == '#123456'
         assert len(restored['luckyData']['7']) == 10
         assert pathlib.Path(data_dir, 'lottery/state.json').exists()
         print('PASS: non-root startup, static UI, HTTPS proxy origin, foreign origin rejection, draw and restart persistence')

@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
+  <head><link rel="icon" type="image/svg+xml" href="/img/gift.svg">
     <title>年会抽奖</title>
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+      content="width=device-width, initial-scale=1"
     />
-    <!-- <link rel="stylesheet" href="./index.css"> -->
+    <meta name="lzcapp-disable-dark" content="true">
   </head>
 
-  <body>
+  <body data-background="stars">
+    <div class="stage-background" aria-hidden="true"></div>
     <script src="./lib/tween.min.js"></script>
 
 
@@ -25,7 +26,7 @@
     <div class="screen-footer">等概率抽取 · 整场不重复中奖</div>
 
     <section id="peoplePreview" class="people-preview" aria-label="参与人员预览">
-      <div class="people-preview-header"><div><span class="preview-kicker">人员预览</span><h2 id="previewHeading">幸运抽奖</h2><p id="previewHint"></p></div><div class="preview-toolbar"><span id="previewTotal"></span><div class="view-switch" role="group" aria-label="预览方式"><button data-preview-view="cards" class="active" aria-pressed="true">清晰名牌</button><button data-preview-view="sphere" aria-pressed="false">3D 球体</button></div></div></div>
+      <div class="people-preview-header"><div><span class="preview-kicker">人员预览</span><h2 id="previewHeading">幸运抽奖</h2><p id="previewHint"></p></div><div class="preview-toolbar"><span id="previewTotal"></span><div class="view-switch" role="group" aria-label="预览方式"><button data-preview-view="wall" aria-pressed="true">年份卡片墙</button><button data-preview-view="cards" class="active" aria-pressed="true">名牌轮播</button><button data-preview-view="sphere" aria-pressed="false">3D 球体</button></div></div></div>
       <div id="previewCards" class="preview-grid" role="list" aria-label="待抽人员名牌"></div>
       <div class="preview-pager"><span id="previewRange"></span><div><button id="previewPrevious" aria-label="上一页人员">← 上一页</button><button id="previewPause" aria-pressed="false">暂停轮播</button><button id="previewNext" aria-label="下一页人员">下一页 →</button></div></div>
     </section>
