@@ -1,9 +1,8 @@
 const express = require("express");
 const opn = require("opn");
-const bodyParser = require("body-parser");
 const path = require("path");
-const chokidar = require("chokidar");
 const cfg = require("./config");
+const { getSettings, updateSettings } = require("./settings");
 
 const {
   loadXML,
@@ -11,7 +10,8 @@ const {
   writeXML,
   saveDataFile,
   shuffle,
-  saveErrorDataFile
+  saveErrorDataFile,
+  dataDir
 } = require("./help");
 
 let app = express(),
@@ -25,39 +25,18 @@ let app = express(),
   defaultType = cfg.prizes[0]["type"],
   defaultPage = `default data`;
 
-//这里指定参数使用 json 格式
-app.use(
-  bodyParser.json({
-    limit: "1mb"
-  })
-);
-
-app.use(
-  bodyParser.urlencoded({
-    extended: true
-  })
-);
-
-if (process.argv.length > 2) {
-  port = process.argv[2];
-}
-
-app.use(express.static(cwd));
-
-//请求地址为空，默认重定向到index.html文件
-app.get("/", (req, res) => {
-  res.redirect(301, "index.html");
-});
-
-//设置跨域访问
-app.all("*", function(req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "X-Requested-With");
-  res.header("Access-Control-Allow-Methods", "PUT,POST,GET,DELETE,OPTIONS");
-  res.header("X-Powered-By", " 3.2.1");
-  res.header("Content-Type", "application/json;charset=utf-8");
+app.disable('x-powered-by');
+if (process.env.LOTTERY_TRUST_PROXY === '1') app.set('trust proxy', 1);
+app.use(express.json({ limit: '8mb' }));
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  if (req.method === 'POST' && origin && origin !== `${req.protocol}://${req.get('host')}` && origin !== process.env.LOTTERY_PUBLIC_ORIGIN) return res.status(403).json({ error: '请从本站操作' });
+  if (req.method === 'POST') res.set('Cache-Control', 'no-store');
   next();
 });
+app.get('/health', (req,res) => res.json({ status: 'ok' }));
+app.get('/results.xlsx', (req,res) => res.download(path.join(dataDir, '抽奖结果.xlsx'), '抽奖结果.xlsx'));
+app.use(express.static(path.join(__dirname, '../product/dist')));
 
 app.post("*", (req, res, next) => {
   log(`请求内容：${JSON.stringify(req.path, 2)}`);
@@ -68,7 +47,7 @@ app.post("*", (req, res, next) => {
 router.post("/getTempData", (req, res, next) => {
   getLeftUsers();
   res.json({
-    cfgData: cfg,
+    cfgData: { ...cfg, appearance: getSettings() },
     leftUsers: curData.leftUsers,
     luckyData: luckyData
   });
@@ -95,7 +74,7 @@ router.post("/getUsers", (req, res, next) => {
 
 // 获取奖品信息
 router.post("/getPrizes", (req, res, next) => {
-  // res.json(curData.prize);
+  res.json(cfg.prizes);
   log(`成功返回奖品数据`);
 });
 
@@ -149,7 +128,7 @@ router.post("/export", (req, res, next) => {
       // res.download('/抽奖结果.xlsx');
       res.status(200).json({
         type: "success",
-        url: "抽奖结果.xlsx"
+        url: "/results.xlsx"
       });
       log(`导出数据成功！`);
     })
@@ -161,6 +140,10 @@ router.post("/export", (req, res, next) => {
       log(`导出数据失败！`);
     });
 });
+
+router.post('/settings', (req,res) => res.json(updateSettings(req.body)));
+router.get('/settings', (req,res) => { res.set('Cache-Control','no-store');res.json(getSettings()); });
+
 
 //对于匹配不到的路径或者请求，返回默认页面
 //区分不同的请求返回不同的页面内容
@@ -186,22 +169,42 @@ function log(text) {
 }
 
 function setLucky(type, data) {
-  if (luckyData[type]) {
-    luckyData[type] = luckyData[type].concat(data);
-  } else {
-    luckyData[type] = Array.isArray(data) ? data : [data];
-  }
-
-  return saveDataFile(luckyData);
+  const prize = cfg.prizes.find(p => p.type === Number(type));
+  if (!prize || !Array.isArray(data) || !data.length || data.length > 119) throw new Error('无效的中奖数据');
+  const roster = new Map(curData.users.map(u => [String(u[0]), u]));
+  const blocked = new Set([...Object.values(luckyData).flat(), ...errorData].map(u => String(u[0])));
+  const seen = new Set();
+  const winners = data.map(user => {
+    const id = String(user?.[0]);
+    if (!roster.has(id) || blocked.has(id) || seen.has(id)) throw new Error('中奖人员重复或不在奖池中');
+    seen.add(id); return roster.get(id);
+  });
+  if ((luckyData[type] || []).length + winners.length > prize.count) throw new Error('超过剩余奖品数量');
+  const next = { ...luckyData, [type]: [...(luckyData[type] || []), ...winners] };
+  saveDataFile(next); luckyData = next;
+  return Promise.resolve();
 }
 
 function setErrorData(data) {
-  errorData = errorData.concat(data);
-
-  return saveErrorDataFile(errorData);
+  if (!Array.isArray(data) || !data.length) throw new Error('无效的重抽数据');
+  const winners = new Map(Object.values(luckyData).flat().map(u => [String(u[0]),u]));
+  const ids = new Set(data.map(u => String(u?.[0])));
+  if (ids.size !== data.length || [...ids].some(id => !winners.has(id))) throw new Error('只能重抽已中奖人员');
+  getLeftUsers();
+  if (curData.leftUsers.length < ids.size) throw new Error('剩余人员不足，无法重抽');
+  const nextLucky = Object.fromEntries(Object.entries(luckyData).map(([type,users]) => [type,users.filter(u => !ids.has(String(u[0])))]));
+  const nextErrors = errorData.concat([...ids].map(id => winners.get(id)));
+  // Journal both files so interrupted redraws recover together on startup.
+  require('./help').atomicJSON('pending-redraw.json', { lucky: nextLucky, errors: nextErrors });
+  saveDataFile(nextLucky); saveErrorDataFile(nextErrors);
+  require('fs').unlinkSync(path.join(dataDir, 'pending-redraw.json'));
+  luckyData = nextLucky; errorData = nextErrors;
+  return Promise.resolve();
 }
 
+
 app.use(router);
+app.use((err,req,res,next) => res.status(400).json({ error: err.message }));
 
 function loadData() {
   console.log("加载EXCEL数据文件");
@@ -212,15 +215,13 @@ function loadData() {
   // 重新洗牌
   shuffle(curData.users);
 
-  // 读取已经抽取的结果
-  loadTempData()
-    .then(data => {
-      luckyData = data[0];
-      errorData = data[1];
-    })
-    .catch(data => {
-      curData.leftUsers = Object.assign([], curData.users);
-    });
+  const fs = require('fs');
+  const journal = path.join(dataDir, 'pending-redraw.json');
+  if (fs.existsSync(journal)) {
+    const pending = JSON.parse(fs.readFileSync(journal, 'utf8'));
+    saveDataFile(pending.lucky); saveErrorDataFile(pending.errors); fs.unlinkSync(journal);
+  }
+  [luckyData, errorData] = loadTempData();
 }
 
 function getLeftUsers() {
@@ -263,7 +264,7 @@ function listenWithRetry(startPort, shouldOpen, retries) {
     }
     used += 1;
 
-    const server = app.listen(currentPort, () => {
+    const server = app.listen(currentPort, process.env.HOST || '0.0.0.0', () => {
       const address = server.address();
       const actualPort = address.port;
       global.console.log(
@@ -311,6 +312,6 @@ module.exports = {
       port = devPort;
     }
 
-    listenWithRetry(port, shouldOpen);
+    listenWithRetry(Number(process.env.PORT || port), shouldOpen);
   }
 };

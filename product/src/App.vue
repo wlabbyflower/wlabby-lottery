@@ -1,7 +1,8 @@
 <template>
   <div class="app">
     <!-- 星空背景 -->
-    <StarCanvas />
+    <StarCanvas :appearance="state.appearance" />
+    <a class="open-settings" href="/admin.html" aria-label="抽奖设置" title="抽奖设置">⚙</a>
 
     <!-- Three CSS3D 容器（名牌墙 / 名牌球由引擎挂载） -->
     <div id="container" ref="containerRef"></div>
@@ -46,3 +47,7 @@ onBeforeUnmount(() => {
   state.ready = false
 })
 </script>
+
+<style scoped>
+.open-settings{position:fixed;right:10vh;top:3vh;z-index:10;color:#7fffff;border:1px solid #7fffff66;background:#00111caa;padding:6px 10px;text-decoration:none;font-size:22px}
+</style>

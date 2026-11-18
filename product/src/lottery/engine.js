@@ -35,6 +35,8 @@ let HIGHLIGHT_CELL = [] // 高亮格子（年份数字图案）
 let shineTimer = null // 卡片随机闪烁定时器
 let rafId = null // requestAnimationFrame 句柄
 let disposed = false
+let currentSaved = false
+let currentRecorded = false
 
 const random = num => Math.floor(Math.random() * num)
 const curPrize = () => state.prizes[state.currentPrizeIndex]
@@ -52,6 +54,8 @@ export function dispose() {
     rafId = null
   }
   window.removeEventListener('resize', onWindowResize)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  TWEEN.removeAll()
   if (controls && typeof controls.dispose === 'function') {
     controls.dispose()
   }
@@ -72,6 +76,7 @@ export async function boot(container) {
   state.prizes = cfg.prizes || []
   state.EACH_COUNT = cfg.EACH_COUNT || []
   state.COMPANY = cfg.COMPANY || ''
+  Object.assign(state.appearance, cfg.appearance || {})
   state.users = Array.isArray(users) ? users : []
   state.luckyUsers = (temp && temp.luckyData) || {}
   state.leftUsers = (temp && temp.leftUsers) || []
@@ -81,7 +86,7 @@ export async function boot(container) {
   // 从最低奖（数组尾部）向高奖方向，找到第一个未抽满的奖项作为当前奖项
   let idx = state.prizes.length - 1
   for (; idx > -1; idx--) {
-    const lucky = state.luckyUsers[idx]
+    const lucky = state.luckyUsers[state.prizes[idx].type]
     if (lucky && lucky.length >= state.prizes[idx].count) {
       continue
     }
@@ -97,6 +102,7 @@ export async function boot(container) {
 
 function bootedInit() {
   window.addEventListener('resize', onWindowResize, false)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   startShineCard()
   animate()
   switchScreen()
@@ -116,6 +122,8 @@ function initCards(showTable) {
   rotateObj = null
   selectedCardIndex = []
   currentLuckys = []
+  currentSaved = false
+  currentRecorded = false
 
   let isBold = false
   let index = 0
@@ -193,14 +201,16 @@ function createCard(user, isBold, id, showTable) {
   }
   element.appendChild(createElement('company', state.COMPANY))
   element.appendChild(createElement('name', user[1]))
-  element.appendChild(createElement('details', user[0] + '<br/>' + user[2]))
+  const details = createElement('details')
+  details.append(document.createTextNode(String(user[0] || '')), document.createElement('br'), document.createTextNode(String(user[2] || '')))
+  element.appendChild(details)
   return element
 }
 
 function createElement(css, text) {
   const dom = document.createElement('div')
   dom.className = css || ''
-  dom.innerHTML = text || ''
+  dom.textContent = text || ''
   return dom
 }
 
@@ -220,13 +230,14 @@ function enter() {
   switchScreen('lottery')
 }
 
-function reset() {
+async function reset() {
   const doReset = window.confirm(
     '是否确认重置数据，重置后，当前已抽的奖项全部清空？'
   )
   if (!doReset) {
     return
   }
+  try { await api.reset() } catch(error) { pushQipao(error.message); return }
   pushQipao('重置所有数据，重新抽奖')
   addHighlight()
   resetCard()
@@ -239,21 +250,23 @@ function reset() {
   state.currentPrizeIndex = state.prizes.length - 1
   state.isLotting = false
   state.spinning = false
-  api.reset().catch(() => {})
+  currentSaved = false
+  currentRecorded = false
   switchScreen('enter')
 }
 
 /* ============================ 抽奖主流程 ============================ */
 
-function startLottery() {
+async function startLottery() {
   state.isLotting = true
-  // 每次抽奖前先保存上一次的抽奖数据
-  saveData()
-  // 更新剩余抽奖数目的数据显示
-  changePrize()
-  resetCard().then(() => {
+  try {
+    await saveData()
+    if (!state.leftUsers.length) throw new Error('剩余抽奖人员已抽完，请导出结果或重置活动。')
+    if ((state.luckyUsers[curPrize().type] || []).length >= curPrize().count) throw new Error('奖品已抽完。')
+    changePrize()
+    await resetCard()
     lottery()
-  })
+  } catch(error) { state.isLotting = false; state.spinning = false; pushQipao(error.message) }
 }
 
 function onLotteryClick() {
@@ -273,7 +286,7 @@ function stopRotate() {
 
 function lottery() {
   state.spinning = true
-  rotateBall().then(() => {
+  rotateBall().then(async () => {
     // 将之前的记录置空
     currentLuckys = []
     selectedCardIndex = []
@@ -284,13 +297,12 @@ function lottery() {
     let leftPrizeCount =
       curPrize().count - (luckyData ? luckyData.length : 0)
 
-    if (leftCount < perCount) {
-      pushQipao('剩余参与抽奖人员不足，现在重新设置所有人员可以进行二次抽奖！')
-      state.leftUsers = state.users.slice()
-      leftCount = state.leftUsers.length
-    }
+    const take = Math.min(perCount, leftCount, leftPrizeCount, TOTAL_CARDS())
+    if (take < 1) throw new Error('没有剩余可抽人员或奖品')
+    currentSaved = false
+    currentRecorded = false
 
-    for (let i = 0; i < perCount; i++) {
+    for (let i = 0; i < take; i++) {
       const luckyId = random(leftCount)
       currentLuckys.push(state.leftUsers.splice(luckyId, 1)[0])
       leftCount--
@@ -306,7 +318,14 @@ function lottery() {
         break
       }
     }
+    await api.saveData(curPrize().type, currentLuckys)
+    currentSaved = true
     selectCard()
+  }).catch(async error => {
+    state.isLotting = false; state.spinning = false; state.currentTake = 0
+    currentLuckys = []; selectedCardIndex = []
+    pushQipao('抽奖未完成：' + error.message)
+    try { const saved = await api.getTempData();state.leftUsers = saved.leftUsers;state.luckyUsers = saved.luckyData } catch {}
   })
 }
 
@@ -317,17 +336,19 @@ function TOTAL_CARDS() {
 /**
  * 重新抽奖：把上一轮结果作废（记录为不在场），重新抽取
  */
-function reLottery() {
-  if (currentLuckys.length === 0) {
-    pushQipao('当前还没有抽奖，无法重新抽取喔~~')
-    return
-  }
-  api.saveErrorData(currentLuckys).catch(() => {})
-  pushQipao(`重新抽取[${curPrize().title}],做好准备`)
+async function reLottery() {
+  if (currentLuckys.length === 0) { pushQipao('当前还没有抽奖，无法重新抽取喔~~'); return }
   state.isLotting = true
-  resetCard().then(() => {
+  try {
+    await api.saveErrorData(currentLuckys)
+    if (currentRecorded) {
+      const ids = new Set(currentLuckys.map(u => String(u[0])))
+      state.luckyUsers[curPrize().type] = (state.luckyUsers[curPrize().type] || []).filter(u => !ids.has(String(u[0])))
+    }
+    pushQipao(`重新抽取[${curPrize().title}],做好准备`)
+    await resetCard()
     lottery()
-  })
+  } catch(error) { state.isLotting = false;pushQipao(error.message) }
 }
 
 /**
@@ -335,6 +356,7 @@ function reLottery() {
  */
 function saveData() {
   const prize = curPrize()
+  if (currentRecorded || !currentLuckys.length) return Promise.resolve()
   if (!prize) {
     return Promise.resolve()
   }
@@ -342,6 +364,7 @@ function saveData() {
   const luckys = state.luckyUsers[type] || []
   const curLucky = luckys.concat(currentLuckys)
   state.luckyUsers[type] = curLucky
+  currentRecorded = true
 
   if (prize.count <= curLucky.length) {
     let next = state.currentPrizeIndex - 1
@@ -351,9 +374,9 @@ function saveData() {
     state.currentPrizeIndex = next
   }
 
-  if (currentLuckys.length > 0) {
+  if (currentLuckys.length > 0 && !currentSaved) {
     // 数据保存机制，以免服务器挂掉数据丢失
-    return api.saveData(type, currentLuckys).catch(() => {})
+    return api.saveData(type, currentLuckys)
   }
   return Promise.resolve()
 }
@@ -412,11 +435,9 @@ function addHighlight() {
 
 function changeCard(cardIndex, user) {
   const card = threeDCards[cardIndex].element
-  card.innerHTML = `<div class="company">${state.COMPANY}</div><div class="name">${
-    user[1]
-  }</div><div class="details">${user[0] || ''}<br/>${
-    user[2] || 'PSST'
-  }</div>`
+  card.querySelector('.company').textContent = state.COMPANY
+  card.querySelector('.name').textContent = user[1]
+  card.querySelector('.details').replaceChildren(document.createTextNode(String(user[0] || '')), document.createElement('br'), document.createTextNode(String(user[2] || 'PSST')))
 }
 
 function shine(cardIndex, color) {
@@ -434,7 +455,7 @@ function startShineCard() {
   }
   shineTimer = setInterval(() => {
     // 正在抽奖停止闪烁
-    if (state.isLotting || !state.leftUsers.length) {
+    if (document.hidden || state.isLotting || !state.leftUsers.length) {
       return
     }
     const maxUser = state.leftUsers.length
@@ -651,7 +672,7 @@ function resetCard(duration = 500) {
 /* ============================ 渲染循环 ============================ */
 
 function animate() {
-  if (disposed) {
+  if (disposed || document.hidden) {
     return
   }
   rafId = requestAnimationFrame(animate)
@@ -659,6 +680,11 @@ function animate() {
   if (controls) {
     controls.update()
   }
+}
+
+function onVisibilityChange() {
+  if (document.hidden) { cancelAnimationFrame(rafId);rafId = null }
+  else if (!rafId && !disposed) animate()
 }
 
 function render() {
@@ -675,7 +701,7 @@ function onWindowResize() {
 }
 
 function createHighlight() {
-  const year = new Date().getFullYear() + ''
+  const year = state.appearance.year
   const step = 4
   let xoffset = 1
   let yoffset = 1

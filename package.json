@@ -1,0 +1,13 @@
+{
+  "name": "lottery-upstream",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix server ci && npm --prefix product ci",
+    "build": "npm --prefix product run build",
+    "start": "node server/index.js 8888 n",
+    "test": "npm --prefix server test"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

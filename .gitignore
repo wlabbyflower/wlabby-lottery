@@ -5,3 +5,12 @@ temp.json
 error.json
 # 运行时导出的抽奖结果数据，不纳入版本管理
 server/抽奖结果.xlsx
+server/cache/
+artifacts/
+*.lpk
+.lzc-cli-cache/
+.env
+*.log
+
+.lzc-cli-build*/
+lzc-build-image-context.tar

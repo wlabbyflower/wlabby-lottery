@@ -1,0 +1,42 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const {spawn}=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(os.tmpdir(),'original-lottery-browser-'));
+let server,browser,base;
+async function start(){server=spawn(process.execPath,['server/index.js','19421','n'],{cwd:root,env:{...process.env,LOTTERY_DATA_DIR:dir},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('server startup timeout')),10000);server.stdout.on('data',b=>{const m=String(b).match(/listening at http:\/\/.*:(\d+)/);if(m){base='http://127.0.0.1:'+m[1];clearTimeout(timer);resolve()}});server.once('exit',()=>reject(new Error('server exited')));});}
+async function stop(){const exit=new Promise(r=>server.once('exit',r));server.kill();await exit}
+(async()=>{try{
+ await start();const api=async(p,body={})=>(await(await fetch(base+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json());
+ console.log('Browser: appearance settings and draw checks');
+ browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH});
+ const page=await browser.newPage({viewport:{width:1600,height:900}}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ await page.goto(base);await page.locator('.enter-btn').waitFor({state:'visible'});await page.waitForTimeout(4300);
+ assert.equal(await page.locator('.element').count(),119);assert.equal(await page.locator('.theme-menu,.people-preview,.gpu-scene').count(),0);
+ const original=await page.locator('.highlight').evaluateAll(nodes=>nodes.map(n=>n.id));assert.ok(original.length>30);
+ await page.screenshot({path:root+'/docs/screenshots/original-screen.png'});
+ await page.click('.open-settings');await page.locator('#year').waitFor();
+ await page.fill('#year','2030');await page.selectOption('#backgroundMode','color');await page.fill('#backgroundColor','#123456');await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ await page.goto(base);await page.locator('.enter-btn').waitFor({state:'visible'});await page.waitForTimeout(4300);
+ const changed=await page.locator('.highlight').evaluateAll(nodes=>nodes.map(n=>n.id));assert.notDeepEqual(changed,original);
+ assert.equal(await page.getAttribute('.canvas-box','data-background'),'color');assert.equal(await page.locator('canvas').isVisible(),false);
+ await page.goto(base+'/admin.html');await page.locator('#year').waitFor();assert.equal(await page.inputValue('#year'),'2030');
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=','base64');
+ await page.setInputFiles('#backgroundFile',{name:'background.png',mimeType:'image/png',buffer:png});await page.waitForFunction(()=>document.querySelector('#backgroundMode').value==='image');await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ await page.reload();await page.locator('#year').waitFor();assert.equal(await page.inputValue('#backgroundMode'),'image');
+ await page.goto(base);await page.locator('.enter-btn').waitFor({state:'visible'});assert.equal(await page.getAttribute('.canvas-box','data-background'),'image');assert.ok(await page.locator('.canvas-box').evaluate(e=>e.style.backgroundImage.includes('data:image/png')));
+ await page.goto(base+'/admin.html');await page.locator('#year').waitFor();await page.click('#removeImage');await page.click('#save');await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('设置已保存'));
+ await page.screenshot({path:root+'/docs/screenshots/original-settings.png',fullPage:true});
+ await page.goto(base);await page.locator('.enter-btn').waitFor({state:'visible'});await page.click('.enter-btn');await page.waitForTimeout(4300);
+ const draw=async()=>{await page.locator('#lottery').click({force:true});await page.waitForFunction(()=>document.querySelector('#lottery').textContent.includes('结束抽奖'));await page.waitForTimeout(400);await page.locator('#lottery').click({force:true});await page.waitForFunction(()=>document.querySelectorAll('.prize').length===5);await page.waitForTimeout(1600)};
+ console.log('Browser: draw');await draw();let saved=await api('/getTempData');assert.equal(saved.luckyData[7].length,5);
+ const first=saved.luckyData[7].map(u=>u[0]);await page.getByRole('button',{name:'重新抽奖',exact:true}).click({force:true});await page.waitForFunction(()=>document.querySelector('#lottery').textContent.includes('结束抽奖'));await page.locator('#lottery').click({force:true});await page.waitForTimeout(1800);
+ saved=await api('/getTempData');assert.equal(saved.luckyData[7].length,5);assert.ok(saved.luckyData[7].every(u=>!first.includes(u[0])));
+ await page.getByRole('button',{name:'导出抽奖结果',exact:true}).click({force:true});await page.waitForTimeout(1500);saved=await api('/getTempData');assert.equal(saved.luckyData[7].length,5);
+ await draw();assert.equal((await api('/getTempData')).luckyData[7].length,10);
+ await draw();const progressed=await api('/getTempData');assert.equal(progressed.luckyData[6].length,5);assert.equal(new Set(Object.values(progressed.luckyData).flat().map(u=>u[0])).size,15);
+ await page.goto(base);await page.locator('#lottery').waitFor({state:'visible'});assert.equal((await api('/getTempData')).luckyData[7].length,10);
+ await page.setViewportSize({width:390,height:844});await page.goto(base+'/admin.html');await page.locator('#year').waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await stop();await start();const restored=await api('/getTempData');assert.equal(restored.cfgData.appearance.year,'2030');assert.equal(restored.luckyData[7].length,10);
+ assert.deepEqual(errors,[]);
+ console.log('PASS: original CSS3D wall, year change, star/color/uploaded-image backgrounds, refresh, draw persistence, redraw, duplicate-free export, mobile settings and restart');
+}finally{await browser?.close();if(server&&!server.killed)await stop();fs.rmSync(dir,{recursive:true,force:true})}})().catch(e=>{console.error(e);process.exitCode=1});

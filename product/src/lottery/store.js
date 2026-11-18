@@ -8,6 +8,7 @@
 import { reactive } from 'vue'
 
 export const state = reactive({
+  appearance: { year: String(new Date().getFullYear()), backgroundMode:'stars', backgroundColor:'#000a14', backgroundImage:'' },
   ready: false, // 基础数据与 3D 名牌是否初始化完成
   screen: 'enter', // enter: 数字墙(桌面) | lottery: 抽奖(球体)
   prizes: [], // 奖品配置（来自服务端 config.js）

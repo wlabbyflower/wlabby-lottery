@@ -1,3 +1,5 @@
+> 本仓库当前版本 **2.0.0** 直接基于 moshang-ax/lottery 原版 `vue` 分支重新开发。仅添加年份与背景设置、必要修复和 LPK；原版大屏 CSS、CSS3D 和动态星空保留。新版使用说明与安装包构建见 [docs/REBUILD.md](docs/REBUILD.md)。以下为上游说明。
+
 # Lottery program
 
 **This project has been refactored with Vue 3 + Vite**

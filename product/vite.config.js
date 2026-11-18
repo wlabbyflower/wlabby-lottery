@@ -11,7 +11,7 @@ const DATA_PORT_BASE = 18888
 const DATA_PORT_TRIES = 100
 
 // 需要转发到本地抽奖数据服务（server 目录）的接口
-const API_PATH_RE = /^\/(getTempData|getUsers|saveData|errorData|export|reset)/
+const API_PATH_RE = /^\/(getTempData|getUsers|saveData|errorData|export|reset|settings|health)/
 const FILE_PATH_RE = /\.xlsx/i
 
 let serverChild = null
@@ -139,6 +139,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    rollupOptions: { input: { screen: path.join(__dirname, 'index.html'), settings: path.join(__dirname, 'admin.html') } }
   }
 })

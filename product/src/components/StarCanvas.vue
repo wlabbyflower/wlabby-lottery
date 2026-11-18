@@ -1,6 +1,6 @@
 <template>
-  <div class="canvas-box">
-    <canvas ref="canvasEl">你的浏览器不支持canvas</canvas>
+  <div class="canvas-box" :data-background="appearance.backgroundMode" :style="backgroundStyle">
+    <canvas v-show="appearance.backgroundMode === 'stars'" ref="canvasEl">你的浏览器不支持canvas</canvas>
   </div>
 </template>
 
@@ -8,7 +8,9 @@
 /**
  * 星空背景（由原 src/lottery/canvas.js 平移）
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+const props = defineProps({ appearance: { type: Object, required: true } })
+const backgroundStyle = computed(() => ({ width:'100vw', height:'100vh', backgroundColor: props.appearance.backgroundColor, backgroundImage: props.appearance.backgroundMode === 'image' ? `url(${JSON.stringify(props.appearance.backgroundImage)})` : 'none', backgroundSize:'cover', backgroundPosition:'center' }))
 
 const canvasEl = ref(null)
 
@@ -63,7 +65,7 @@ function drawStars() {
     resize()
   }
 
-  ctx.fillStyle = 'rgba(0,10,20,1)'
+  ctx.fillStyle = props.appearance.backgroundColor
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
   for (let i = 0; i < stars.length; i++) {
@@ -80,12 +82,19 @@ function drawStars() {
 }
 
 function executeFrame() {
-  if (!animate) return
+  if (!animate || document.hidden || props.appearance.backgroundMode !== 'stars') { rafId = null; return }
   moveStars()
   drawStars()
   rafId = requestAnimationFrame(executeFrame)
 }
 
+function resume() {
+  if (!canvas) return
+  if (rafId) cancelAnimationFrame(rafId)
+  rafId = null
+  executeFrame()
+}
+watch(() => props.appearance.backgroundMode, resume)
 onMounted(() => {
   canvas = canvasEl.value
   ctx = canvas.getContext('2d')
@@ -94,11 +103,13 @@ onMounted(() => {
   window.addEventListener('resize', resize)
   animate = true
   executeFrame()
+  document.addEventListener('visibilitychange', resume)
 })
 
 onBeforeUnmount(() => {
   animate = false
   if (rafId) cancelAnimationFrame(rafId)
   window.removeEventListener('resize', resize)
+  document.removeEventListener('visibilitychange', resume)
 })
 </script>

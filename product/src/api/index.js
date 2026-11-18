@@ -10,7 +10,8 @@ async function post(url, body) {
     body: body === undefined ? undefined : JSON.stringify(body)
   })
   if (!res.ok) {
-    throw new Error(`请求失败(${res.status}): ${url}`)
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || `请求失败(${res.status}): ${url}`)
   }
   return res.json()
 }

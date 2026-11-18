@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/dist
+server/cache
+server/抽奖结果.xlsx
+**/*.test.js
+artifacts
+.lzc-cli-cache
+*.lpk
+.env*
+docs
+lpk/content
+
+.lzc-cli-build*/
+lzc-build-image-context.tar
