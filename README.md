@@ -1,4 +1,4 @@
-> 本仓库当前交付基于 [LOG1997/log-lottery](https://github.com/LOG1997/log-lottery) 的已完成年份修复版。LPK 名称 `lottery`，包 ID `abby.lzcapp.lottery`，安装包版本 `2.0.1`。本次仅调整安装包标识，网页功能保持现有成品原样。打包与验证见 [LPK.md](LPK.md)。
+> 本仓库当前交付基于 [LOG1997/log-lottery](https://github.com/LOG1997/log-lottery) 的已完成年份修复版。LPK 名称 `lottery`，包 ID `abby.lzcapp.lottery`，安装包版本 `2.0.2`。本版修复图片上传弹窗中的本地/网盘文件选择器遮挡、取消重试和同文件重选问题。打包与验证见 [LPK.md](LPK.md)。
 
 <div align="center">
     <a href="https://log1997.github.io/log-lottery/">

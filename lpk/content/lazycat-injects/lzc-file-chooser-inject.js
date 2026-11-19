@@ -317,6 +317,14 @@ if (!customElements.get("lzc-file-picker")) {
       let settled = false;
       const host = document.createElement("div");
       host.style.cssText = "position:fixed;inset:0;z-index:2147483647";
+      // A page's showModal() dialog makes ordinary document overlays inert,
+      // regardless of z-index. Open our own top-layer dialog above that modal.
+      const modal = document.createElement("dialog");
+      modal.dataset.lzcFileChooser = "";
+      modal.style.cssText = "position:fixed;inset:0;margin:0;padding:0;border:0;max-width:none;max-height:none;width:100vw;height:100vh;background:transparent;overflow:visible";
+      const backdropStyle = document.createElement("style");
+      backdropStyle.textContent = "dialog[data-lzc-file-chooser]::backdrop{background:transparent}";
+      modal.append(backdropStyle, host);
       host.dataset.theme = detectPageTheme();
       const shadow = host.attachShadow({ mode: "open" });
       const style = document.createElement("style");
@@ -407,7 +415,8 @@ if (!customElements.get("lzc-file-picker")) {
       const cleanup = () => {
         themeObserver.disconnect();
         colorScheme?.removeEventListener?.("change", syncTheme);
-        host.remove();
+        if (modal.open) modal.close();
+        modal.remove();
         document.removeEventListener("keydown", onKeydown, true);
         document.documentElement.style.overflow = previousOverflow;
         if (STATE.modal === host) {
@@ -432,13 +441,18 @@ if (!customElements.get("lzc-file-picker")) {
         if (event.target === overlay) abort();
       });
       close.addEventListener("click", abort);
+      modal.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        abort();
+      });
       localTab.addEventListener("click", () => {
         if (settled) return;
         try {
-          // Call the native picker within the click's user activation.
-          const value = localAction();
           settled = true;
           cleanup();
+          // Restore the app's modal before opening its input, while the click
+          // still has user activation. The native call bypasses our input hook.
+          const value = localAction();
           resolve({ native: true, value });
         } catch (error) {
           settled = true;
@@ -448,10 +462,11 @@ if (!customElements.get("lzc-file-picker")) {
       });
 
       document.documentElement.style.overflow = "hidden";
-      document.documentElement.appendChild(host);
+      document.documentElement.appendChild(modal);
       STATE.modal = host;
       STATE.modalAbort = abort;
       document.addEventListener("keydown", onKeydown, true);
+      modal.showModal();
       cloudTab.focus({ preventScroll: true });
 
       createPicker({ isModal: true, ...pickerProps }, panel)
@@ -1192,12 +1207,14 @@ if (!customElements.get("lzc-file-picker")) {
       localAction: () => openNativeInput(input),
     });
     if (result.native) return result.value;
+    if (!result.stats.length) return;
     return openLazyCatInputPicker(input, result.stats);
   };
 
   const shouldUseNativeFileInput = (input) =>
     STATE.hooks.bypassInputClick ||
     extensionOwns("picker") ||
+    input.disabled ||
     input.type !== "file" ||
     input.webkitdirectory ||
     !hasLazyCatPicker();

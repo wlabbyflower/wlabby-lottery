@@ -38,8 +38,9 @@ async function uploadFile(fileData: IFileData | null) {
         imageData.value = null
         return
     }
-    const isImage = /image*/.test(fileData?.type || '')
+    const isImage = fileData.type.startsWith('image/')
     if (!isImage) {
+        imageData.value = null
         imgUploadToast.value = 3
         return
     }
@@ -76,6 +77,8 @@ function submitUpload() {
 }
 watch(visible, (newVal) => {
     if (newVal) {
+        imageData.value = null
+        imgUploadToast.value = 0
         uploadDialogRef.value.showDialog()
     }
 })

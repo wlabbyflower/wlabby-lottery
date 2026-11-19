@@ -1,5 +1,5 @@
 package: abby.lzcapp.lottery
-version: 2.0.1
+version: 2.0.2
 name: lottery
 description: 3D 年会抽奖，支持自由添加年份图案、名单与奖项配置。
 author: LOG1997 / Lazy Cat 社区适配
